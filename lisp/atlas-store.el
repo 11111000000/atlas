@@ -12,6 +12,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'seq)
 (require 'subr-x)
 
 (declare-function atlas-root-dir "atlas" (root))
@@ -23,15 +24,13 @@
     (expand-file-name (concat name suffix) dir)))
 
 (defun atlas-store--write (path obj)
-  "Safely write OBJ to PATH as printed sexp."
-  (let* ((tmp (concat path ".tmp")))
-    (with-temp-file tmp
-      (let ((print-length nil)
-            (print-level nil)))
-        (prin1 obj (current-buffer))
-        (insert "\n"))
-    (when (file-exists-p path) (delete-file path))
-    (rename-file tmp path t)
+  "Write OBJ to PATH as printed sexp. Honors .gz via jka-compr."
+  (let ((print-length nil)
+        (print-level nil))
+    (with-temp-buffer
+      (prin1 obj (current-buffer))
+      (insert "\n")
+      (write-region (point-min) (point-max) path nil 'silent))
     path))
 
 (defun atlas-store--read (path)
@@ -114,6 +113,12 @@ then append new ones."
              (new (nconc current (copy-sequence sums))))
         (atlas-store-save-summaries root new)))
     t))
+
+(defun atlas-store-counts (root)
+  "Return current counts in store for ROOT as plist :files :symbols :edges."
+  (list :files (length (atlas-store-load-files root))
+        :symbols (length (atlas-store-load-symbols root))
+        :edges (length (atlas-store-load-edges root))))
 
 (provide 'atlas-store)
 

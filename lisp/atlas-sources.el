@@ -8,6 +8,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'seq)
 
 (defvar atlas--sources nil
   "List of registered sources: (NAME . PLIST) where PLIST includes
@@ -21,17 +22,26 @@
     name))
 
 (cl-defun atlas-run-sources (root &key changed opts emit done kinds levels languages)
-  "Run all registered sources for ROOT with filters.
-Arguments map to provider signature."
+  "Run all registered sources for ROOT with optional filters.
+Filters: KINDS, LEVELS, LANGUAGES. Providers must match intersection."
   (let* ((emit (or emit (lambda (_batch) nil)))
          (done (or done (lambda () nil))))
     (dolist (entry atlas--sources)
       (let* ((name (car entry))
              (pl (cdr entry))
              (fn (plist-get pl :fn))
-             (caps (plist-get pl :capabilities)))
-        (ignore name caps) ;; Future filtering by kinds/levels/languages
-        (when (functionp fn)
+             (caps (plist-get pl :capabilities))
+             (cap-langs (plist-get caps :languages))
+             (cap-kinds (plist-get caps :kinds))
+             (cap-levels (plist-get caps :levels))
+             (ok t))
+        (when languages
+          (setq ok (and ok (seq-some (lambda (x) (member x cap-langs)) languages))))
+        (when (and ok kinds)
+          (setq ok (and ok (seq-some (lambda (x) (member x cap-kinds)) kinds))))
+        (when (and ok levels)
+          (setq ok (and ok (seq-some (lambda (x) (member x cap-levels)) levels))))
+        (when (and ok (functionp fn))
           (condition-case err
               (funcall fn :root root :changed changed :emit emit :done done :opts opts)
             (error (message "atlas source %S error: %S" name err))))))

@@ -19,11 +19,16 @@ EMIT receives each item; DONE called once."
          (results (atlas-query root query :k k)))
     (dolist (r results)
       (let* ((id (alist-get :id r))
+             (name (alist-get :name r))
+             (sig (alist-get :sig r))
+             (doc1 (alist-get :doc1 r))
+             (rel (alist-get :file r))
+             (range (alist-get :range r))
              (item (list :type 'symbol
-                         :title (or id "symbol")
-                         :snippet ""
-                         :path ""
-                         :range (cons 0 0)
+                         :title (or name id "symbol")
+                         :snippet (or sig doc1 "")
+                         :path (or rel "")
+                         :range (or range (cons 0 0))
                          :score (or (alist-get :score r) 0.0)
                          :source 'atlas)))
         (when (functionp emit) (funcall emit item))))

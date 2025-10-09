@@ -158,6 +158,7 @@
     (plist-put state :meta meta)
     state))
 
+;;;###autoload
 (defun atlas-stats (root)
   "Return stats alist for ROOT with counts and schema."
   (interactive (list (read-directory-name "Atlas root: " nil nil t)))
@@ -189,13 +190,18 @@
 ;; Basic commands
 
 ;;;###autoload
-(defun atlas-index (root &optional full)
-  "Index ROOT. If FULL non-nil, force complete rebuild."
+(defun atlas-index (root &optional full-or-changed)
+  "Index ROOT. If FULL-OR-CHANGED is t (or non-nil non-list), do a full rebuild.
+If FULL-OR-CHANGED is a list of paths, reindex only changed files."
   (interactive (list (read-directory-name "Atlas root: " nil nil t)
                      (when current-prefix-arg t)))
   (let* ((state (atlas-open root))
-         (counts (list :files 0 :symbols 0 :edges 0))
          (files-acc 0) (symbols-acc 0) (edges-acc 0)
+         (full? (and full-or-changed (not (listp full-or-changed))))
+         (changed (cond
+                   ((listp full-or-changed) full-or-changed)
+                   (full? nil)
+                   (t :auto)))
          (emit (lambda (batch)
                  ;; batch: (:file REL?) (:files LIST) (:symbols LIST) (:edges LIST) (:summaries LIST)
                  (let ((fs (alist-get :files batch))
@@ -212,16 +218,20 @@
                      (require 'atlas-model)
                      (let ((st (atlas-state root)))
                        (when st (atlas-model-merge-batch st batch)))))))
-         (done (lambda ()
-                 (setf counts (list :files files-acc :symbols symbols-acc :edges edges-acc)))))
-    (atlas-events-publish :atlas-index-start :root root :full (and full t))
+         (done (lambda () t)))
+    (atlas-events-publish :atlas-index-start :root root :full (and full? t))
     ;; Reset inv-index readiness on new index run
     (plist-put state :inv-index-ready? nil)
     (atlas--set-state root state)
-    (atlas-run-sources root :changed (unless full :auto) :opts nil :emit emit :done done
+    (atlas-run-sources root :changed changed :opts nil :emit emit :done done
                        :kinds '(files symbols edges summaries) :levels '(L0 L1 L2 L3) :languages '(elisp))
     (funcall done)
-    (setf state (atlas--update-meta-counts state files-acc symbols-acc edges-acc))
+    ;; Recalculate counts from store to keep meta accurate on partial updates
+    (let* ((cur (ignore-errors (atlas-store-counts root)))
+           (files (or (and cur (plist-get cur :files)) files-acc))
+           (symbols (or (and cur (plist-get cur :symbols)) symbols-acc))
+           (edges (or (and cur (plist-get cur :edges)) edges-acc)))
+      (setf state (atlas--update-meta-counts state files symbols edges)))
     (atlas-store-save-meta root (plist-get state :meta))
     (plist-put state :last-index-at (atlas--now))
     (atlas--set-state root state)

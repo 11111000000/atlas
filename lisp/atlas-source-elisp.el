@@ -32,6 +32,20 @@
         (push path files)))
     (nreverse files)))
 
+(defun atlas-elisp--normalize-paths (root paths)
+  "Normalize PATHS (relative or absolute) to a list of absolute .el files under ROOT that exist."
+  (let* ((root (file-name-as-directory (expand-file-name root)))
+         (abs (mapcar (lambda (p)
+                        (let ((pp (expand-file-name p root)))
+                          (if (file-name-absolute-p p)
+                              (expand-file-name p)
+                            pp)))
+                      paths)))
+    (seq-filter (lambda (p)
+                  (and (string-match-p "\\.el\\'" p)
+                       (file-exists-p p)))
+                abs)))
+
 (defun atlas-elisp--rel (root path)
   (string-remove-prefix (file-name-as-directory (expand-file-name root))
                         (expand-file-name path)))
@@ -128,13 +142,17 @@ Positions are byte offsets within file contents."
     (nreverse symbols)))
 
 (cl-defun atlas-elisp-source-run (&key root changed emit done opts)
-  "Elisp provider entry point. See atlas-sources for contract."
-  (ignore changed opts)
+  "Elisp provider entry point. See atlas-sources for contract.
+CHANGED may be :auto, nil, or a list of paths (relative or absolute)."
+  (ignore opts)
   (let* ((root (file-name-as-directory (expand-file-name root)))
-         (paths (atlas-elisp--list-files root)))
-    ;; L0 files
-    (let ((files (mapcar (lambda (p) (atlas-elisp--file-entry root p)) paths)))
-      (funcall emit (list :files files)))
+         (paths (if (and (listp changed) changed)
+                    (atlas-elisp--normalize-paths root changed)
+                  (atlas-elisp--list-files root))))
+    ;; L0 files (inventory) only on full run (no explicit CHANGED list)
+    (when (not (and (listp changed) changed))
+      (let ((files (mapcar (lambda (p) (atlas-elisp--file-entry root p)) paths)))
+        (funcall emit (list :files files))))
     ;; L1/L2 per file (batch by file to keep memory modest)
     (dolist (path paths)
       (condition-case err

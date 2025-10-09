@@ -19,7 +19,7 @@
 
 (cl-defun atlas-index-async (root &key changed emit done)
   "Run indexing for ROOT asynchronously. Return plist with :token and :cancel.
-CHANGED, EMIT, DONE are forwarded to providers. When finished, DONE is called."
+CHANGED may be :full or a list of paths (relative or absolute). When finished, DONE is called."
   (let* ((token (format "atlas-%s-%f" (md5 root) (float-time)))
          (timer nil))
     (setq timer
@@ -28,7 +28,11 @@ CHANGED, EMIT, DONE are forwarded to providers. When finished, DONE is called."
                          (remhash token atlas--async-tasks)
                          (condition-case err
                              (progn
-                               (atlas-index root (and (eq changed :full) t))
+                               (let ((arg (cond
+                                           ((eq changed :full) t)
+                                           ((listp changed) changed)
+                                           (t nil))))
+                                 (atlas-index root arg))
                                (when (functionp done) (funcall done)))
                            (error (message "atlas-index-async error: %S" err))))))
     (puthash token timer atlas--async-tasks)
@@ -42,10 +46,10 @@ CHANGED, EMIT, DONE are forwarded to providers. When finished, DONE is called."
   (interactive (list (read-directory-name "Atlas root: " nil nil t)
                      (let ((s (read-string "Paths (space-separated): ")))
                        (split-string s "[ \t]+" t))))
-  ;; Route as changed-only run.
+  ;; Route as changed-only run with given PATHS.
   (let ((changed (and (listp paths) paths)))
-    (atlas-index root (when (eq changed :full) t))
-    (ignore changed)))
+    (atlas-index root changed)
+    t))
 
 (provide 'atlas-index)
 
