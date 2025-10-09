@@ -16,10 +16,9 @@
 (require 'seq)
 (require 'map)
 (require 'subr-x)
+(require 'atlas-store)
 
 ;; Forward decls to avoid cycles
-(declare-function atlas-store-load-meta "atlas-store" (root))
-(declare-function atlas-store-save-meta "atlas-store" (root meta))
 (declare-function atlas-run-sources "atlas-sources"
                   (root &key changed opts emit done kinds levels languages))
 (declare-function atlas-query "atlas-query"
@@ -116,7 +115,7 @@
   (puthash (file-name-as-directory (expand-file-name root)) state atlas--states))
 
 (defun atlas-open (root)
-  "Open Atlas for ROOT directory: ensure store dir, load meta, return state."
+  "Open Atlas for ROOT directory: ensure store dir, load meta and in-memory indices, return state."
   (interactive (list (read-directory-name "Atlas root: " nil nil t)))
   (let* ((root (file-name-as-directory (expand-file-name root)))
          (dir (atlas-root-dir root)))
@@ -131,6 +130,10 @@
                             :caches (list)
                             :last-index-at 0.0
                             :inv-index-ready? nil))))
+      ;; Build in-memory model from store lazily on open
+      (ignore-errors
+        (require 'atlas-model)
+        (setq state (atlas-model-build-from-store state)))
       (atlas--set-state root state)
       (when (called-interactively-p 'interactive)
         (message "Atlas opened at %s" dir))
@@ -194,7 +197,7 @@
          (counts (list :files 0 :symbols 0 :edges 0))
          (files-acc 0) (symbols-acc 0) (edges-acc 0)
          (emit (lambda (batch)
-                 ;; batch: (:files LIST) (:symbols LIST) (:edges LIST) (:summaries LIST)
+                 ;; batch: (:file REL?) (:files LIST) (:symbols LIST) (:edges LIST) (:summaries LIST)
                  (let ((fs (alist-get :files batch))
                        (ss (alist-get :symbols batch))
                        (es (alist-get :edges batch)))
@@ -203,11 +206,18 @@
                    (cl-incf edges-acc (length es))
                    (atlas-events-publish :atlas-index-progress
                                          :files files-acc :symbols symbols-acc :edges edges-acc)
-                   ;; In-memory merge hook would go here
-                   )))
+                   ;; Persist and update in-memory model
+                   (ignore-errors (atlas-store-save-batch root batch))
+                   (ignore-errors
+                     (require 'atlas-model)
+                     (let ((st (atlas-state root)))
+                       (when st (atlas-model-merge-batch st batch)))))))
          (done (lambda ()
                  (setf counts (list :files files-acc :symbols symbols-acc :edges edges-acc)))))
     (atlas-events-publish :atlas-index-start :root root :full (and full t))
+    ;; Reset inv-index readiness on new index run
+    (plist-put state :inv-index-ready? nil)
+    (atlas--set-state root state)
     (atlas-run-sources root :changed (unless full :auto) :opts nil :emit emit :done done
                        :kinds '(files symbols edges summaries) :levels '(L0 L1 L2 L3) :languages '(elisp))
     (funcall done)

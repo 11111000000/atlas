@@ -48,21 +48,26 @@
           :lang 'elisp
           :flags (list :generated? nil :vendor? nil))))
 
-(defun atlas-elisp--scan-requires (content)
-  "Return list of (:type ... :from :to ...) edges for require/provide in CONTENT."
+(defun atlas-elisp--scan-requires (rel content)
+  "Return list of (:type ... :from :to ...) edges for require/provide in CONTENT, bound to REL file."
   (let ((edges nil))
     (save-match-data
       (with-temp-buffer
         (insert content)
         (goto-char (point-min))
         (while (re-search-forward "(provide\\s-+'\\([^)\\s-]+\\))" nil t)
-          (push (list :type 'provide :from (format "feature:%s" (match-string 1))
-                      :to nil :weight 1.0 :source 'elisp) edges))
+          (push (list :type 'provide
+                      :from rel
+                      :to (format "feature:%s" (match-string 1))
+                      :weight 1.0 :source 'elisp)
+                edges))
         (goto-char (point-min))
         (while (re-search-forward "(require\\s-+'\\([^)\\s-]+\\))" nil t)
-          (push (list :type 'require :from nil
+          (push (list :type 'require
+                      :from rel
                       :to (format "feature:%s" (match-string 1))
-                      :weight 1.0 :source 'elisp) edges))))
+                      :weight 1.0 :source 'elisp)
+                edges))))
     (nreverse edges)))
 
 (defun atlas-elisp--doc1 (form)
@@ -89,7 +94,8 @@
     (_ 'symbol)))
 
 (defun atlas-elisp--scan-symbols (rel content)
-  "Scan CONTENT for top-level def* forms; return list of symbol plists with REL."
+  "Scan CONTENT for top-level def* forms; return list of symbol plists with REL.
+Positions are byte offsets within file contents."
   (let ((symbols nil))
     (condition-case _
         (with-temp-buffer
@@ -98,17 +104,19 @@
           (let ((eof (make-symbol "eof")))
             (condition-case _eoi
                 (while t
-                  (let ((form (read (current-buffer))))
+                  (let* ((beg (point))
+                         (form (read (current-buffer)))
+                         (end (point)))
                     (when (and (consp form)
                                (memq (car form) '(defun defmacro defvar defcustom defconst)))
                       (let* ((head (car form))
                              (name (symbol-name (cadr form)))
                              (kind (atlas-elisp--symbol-kind head))
-                             (sig (format "%S" (pcase head
-                                                 ((or 'defun 'defmacro) (seq-take form 3))
-                                                 (_ (seq-take form 2)))))
+                             (sig (format "%S"
+                                          (pcase head
+                                            ((or 'defun 'defmacro) (seq-take form 3))
+                                            (_ (seq-take form 2)))))
                              (doc1 (atlas-elisp--doc1 form))
-                             (beg 0) (end 0)
                              (id (atlas--symbol-id :lang "elisp" :rel rel
                                                    :name name :beg beg :end end :kind (symbol-name kind))))
                         (push (list :id id :file rel :name name :kind kind
@@ -135,8 +143,8 @@
                             (insert-file-contents path nil 0 atlas-max-file-size)
                             (buffer-substring-no-properties (point-min) (point-max))))
                  (symbols (atlas-elisp--scan-symbols rel content))
-                 (edges (atlas-elisp--scan-requires content)))
-            (funcall emit (list :symbols symbols :edges edges)))
+                 (edges (atlas-elisp--scan-requires rel content)))
+            (funcall emit (list :file rel :symbols symbols :edges edges)))
         (error (message "atlas-elisp-source error on %s: %S" path err)))))
   (when (functionp done) (funcall done)))
 

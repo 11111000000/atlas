@@ -1,7 +1,8 @@
 ;;; atlas-index.el --- Index orchestration and async API -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; Thin orchestrator over providers; exposes async wrapper and changed-only stubs.
+;; Thin orchestrator over providers; persists batches and updates in-memory model.
+;; Exposes async wrapper and changed-only stubs.
 
 ;;; Code:
 
@@ -11,6 +12,7 @@
 (require 'atlas-sources)
 (require 'atlas-store)
 (require 'atlas-events)
+(require 'atlas-model)
 
 (defvar atlas--async-tasks (make-hash-table :test #'equal)
   "Root → timer object for running async index.")
@@ -40,9 +42,10 @@ CHANGED, EMIT, DONE are forwarded to providers. When finished, DONE is called."
   (interactive (list (read-directory-name "Atlas root: " nil nil t)
                      (let ((s (read-string "Paths (space-separated): ")))
                        (split-string s "[ \t]+" t))))
-  (ignore root paths)
-  ;; For now, run full provider; future: pass :changed=paths
-  (atlas-index root nil))
+  ;; Route as changed-only run.
+  (let ((changed (and (listp paths) paths)))
+    (atlas-index root (when (eq changed :full) t))
+    (ignore changed)))
 
 (provide 'atlas-index)
 
