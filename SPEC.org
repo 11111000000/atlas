@@ -1,0 +1,277 @@
+#+title: Atlas SPEC — Универсальная карта проекта для Emacs
+#+author: Peter Kosov <11111000000@email.com>
+#+startup: show2levels
+#+language: ru
+
+* Введение
+- Миссия
+  - Atlas — модуль Emacs для построения и использования универсальной «карты проекта»: инвентарь файлов, символы, зависимости, краткие резюме, быстрый ретривал и планирование контекста под задачу.
+  - Цель v1: Emacs Lisp проекты. Быстро получать минимально достаточный контекст (файлы/фрагменты/документация) для LLM и человека. Дальше — JS/TS и Haskell.
+- Принципы (согласно CODESTYLE.org)
+  - Чистое ядро + тонкие порты; функции небольшие и тестируемые; явные данные вместо скрытых состояний.
+  - Версионированные схемы; устойчивость к частичным данным; асинхронность без подвисаний.
+  - Модульность и расширяемость: источники карты (elisp/LSP/ctags/внешний CLI) подключаются через единый интерфейс.
+  - Оффлайн по умолчанию; хранение локально в репозитории; уважение к производительности и UX Emacs.
+
+* Диалектика (тезис ↔ антитезис → синтез)
+- Тезис: полнота и точность (AST/LSP/Graph/резюме/эмбеддинги).
+- Антитезис: простота и скорость (инвентарь+rg+эвристики).
+- Синтез: многоуровневая карта, инкрементальная, с деградациями и открытыми источниками; в v1 — Elisp-first, позже — LSP/ctags/внешние сервисы.
+
+* Обзор возможностей (v1 → v2+)
+- v1 (Emacs Lisp)
+  - Построение карты: L0 инвентарь, L1 символы (defun/defmacro/defvar/defcustom/defconst), L2 зависимости (require/provide), L3 краткие резюме.
+  - Инкрементальный пересчёт и сегментированное хранение.
+  - Быстрый ретривал и планировщик контекста (context plan) с оценкой токенов.
+  - Интеграции: lore.el (getter atlas), Context Navigator (экспорт групп).
+- v2+ (расширение языков/источников)
+  - Источники: LSP (documentSymbol, references, callHierarchy), ctags, внешние индексаторы.
+  - Больше типов рёбер (call/ref/import/implement/extend), эмбеддинги/гибридный поиск (опционально).
+  - Визуализация графа, экспорт для web-viewer.
+
+* Хранилище и формат (версионированный, универсальный)
+- Расположение
+  - <root>/.context/atlas/v1/
+- Файлы
+  - meta.sexp — метаданные
+  - files.sexp — инвентарь файлов (или сегменты files-A.sexp …)
+  - symbols.sexp — символы (или сегменты)
+  - edges.sexp — рёбра зависимостей
+  - summaries.sexp — краткие резюме (файл/символ)
+  - inv.sexp — обратный индекс токенов (опционально, для ускорения)
+- Формы данных (plist; стабильные ключи; символы-ключи)
+  - Файл: (:path REL :size INT :mtime FLOAT :hash STR|nil :lang elisp :flags (:generated? nil :vendor? nil))
+  - Символ: (:id STR :file REL :name STR :kind function|macro|var|custom|const :beg INT :end INT :sig STR|nil :doc1 STR|nil :exported? t|nil :source elisp|lsp|ctags)
+  - Ребро: (:type require|provide|call|ref|import :from ID|REL|feature :to ID|REL|feature :weight FLOAT :source elisp|lsp|ctags)
+  - Резюме: (:file REL :summary STR) | (:symbol ID :summary STR)
+  - Обратный индекс: token(lowercase) → vector of symbol-id
+- Идентификатор символа (стабильный)
+  - "LANG:REL#NAME@BEG-END/KIND" (в v1 LANG=elisp)
+- Компрессия/сегментация
+  - Для больших карт включается gzip и разбиение по сегментам (по 1-й букве пути/символа); в meta отмечается :compressed? t.
+- Пример meta.sexp
+  #+begin_src emacs-lisp
+  (:schema 1
+   :project-root "/home/user/code/foo"
+   :generated-at 1730820000.12
+   :counts (:files 128 :symbols 1640 :edges 4100)
+   :languages (elisp)
+   :opts (:segment-threshold 10000 :compressed? t))
+  #+end_src
+
+* Архитектура и слои
+- Модель/индексы (в памяти)
+  - files-idx: path → file-plist
+  - symbols-by-id: id → plist
+  - symbols-by-name: name → vector of id
+  - edges-out/in: id → vector of id/feature
+  - inv-index: token → vector of id
+  - Все индексы ленивые, кэшируются и обновляются инкрементально.
+- Источники карты (pluggable providers)
+  - Интерфейс: (fn :root ROOT :changed PATHS :emit EMIT :done DONE :opts OPTS)
+  - EMIT батчи: (:files …) (:symbols …) (:edges …) (:summaries …); DONE — завершение.
+  - Регистрация: atlas-register-source NAME &key capabilities fn cost
+  - capabilities: (:languages (elisp …) :kinds (files symbols edges summaries) :levels (L0 L1 L2 L3))
+  - Встроенный: elisp-source (v1). Позже: lsp-source, ctags-source, external-source (stdin/jsonl).
+- Хранилище
+  - Чтение/запись sexp, gzip; поддержка сегментов; миграция схем.
+- Ретривал и планирование контекста
+  - Лексический поиск + графовое расширение + rerank.
+  - Упаковка «рюкзака» контекста: сигнатуры, doc1, минимальные окрестности тела, импорт/фичи.
+- Интеграции (лёгкие порты)
+  - lore.el (getter atlas) и Context Navigator (экспорт групп); UI-обозреватель.
+
+* Индексация (v1: Emacs Lisp)
+- L0 Инвентарь
+  - project.el/git ls-files/обход; TTL; исключения (atlas-exclude-dirs).
+  - Атрибуты: size, mtime, опц. hash (atlas-hash-content).
+- L1 Символы
+  - Разбор sexp (read) в временном буфере; извлечение defun/defmacro/defvar/defcustom/defconst.
+  - Поля: name, kind, beg/end, sig (первая строка формы), doc1 (первый docstring).
+  - Порог atlas-max-file-size — деградация к простому извлечению дефиниций.
+- L2 Зависимости
+  - require 'feature и provide 'feature из sexp.
+  - call/ref — опционально через elisp-refs с лимитами (atlas-elisp-use-elisp-refs).
+- L3 Резюме
+  - Первая строка docstring/комментарий в начале файла; можно обновлять лениво.
+- Инкрементальность
+  - По mtime/size/hash; перед заливкой новых записей удаляются старые для данного файла.
+  - atlas-update root paths — перескан подмножества.
+- Асинхронность/UX
+  - Батчи через run-at-time; публикация событий прогресса; отмена задач; debounce сохранений.
+
+* API Emacs (публичные функции и команды)
+- Жизненный цикл
+  - atlas-open root → загрузить карту/индексы; вернуть state.
+  - atlas-close root → выгрузить индексы/кэши.
+  - atlas-root-dir root → путь .context/atlas/v1/.
+  - atlas-state root → текущее состояние.
+- Индексация
+  - atlas-index root &optional full
+  - atlas-update root paths
+  - atlas-reindex-changed root
+  - atlas-stats root → {:files N :symbols M :edges K :t-indexed SEC :schema 1}
+  - atlas-watch-mode (minor-mode, global)
+  - atlas-index-async root &key changed emit done → (:token :cancel)
+- Поиск/граф/разрешение
+  - atlas-query root keywords &key k kinds filters → результаты symbol/file с score и range.
+  - atlas-graph root selector &key depth edge-types → подграф (nodes, edges).
+  - atlas-resolve root selector → открыть/вернуть фрагмент (буфер, позиции, sig/doc).
+- План контекста для LLM
+  - atlas-plan-context root query &key k budget model
+    - Возвращает: (:files [REL…] :spans [(:file REL :beg INT :end INT)…] :docs [(info …)] :rationale STR :est-tokens INT :items [alist…])
+    - Пайплайн: query → кандидаты → граф-расширение (1 hop require/provide) → упаковка фрагментов до budget.
+- Экспорт/импорт
+  - atlas-dump root what &key format path → sexp/jsonl.
+  - atlas-import root batch → влить внешние данные (LSP/ctags/CLI).
+- События
+  - atlas-events-subscribe topic fn / atlas-events-unsubscribe
+  - atlas-events-publish topic &rest args
+  - Темы: :atlas-index-start|progress|done|update|error
+- Команды
+  - M-x atlas-index (C-u полная)
+  - M-x atlas-reindex-changed
+  - M-x atlas-stats
+  - M-x atlas-query
+  - M-x atlas-explore (простой обозреватель)
+
+* Интеграция с lore.el
+- Getter atlas (опциональный модуль atlas-lore.el)
+  - lore-getter-atlas-run (&key request topk emit done)
+  - Выходные элементы:
+    - symbol: (:type symbol :title NAME :snippet SIG/DOC1 :path REL :range (beg . end) :score :source atlas)
+    - file: (:type file :title FILE :snippet SUMMARY :path REL :score :source atlas)
+- План контекста
+  - atlas-plan-context повышает вес для результатов; lore может дополнить доки (man/info/org/URL) и rerank.
+
+* Интеграция с Context Navigator
+- Экспорт групп
+  - atlas-build-context-group root query → набор файлов/спанов на основе плана.
+  - atlas-export-to-context results → элементы в активную группу Navigator.
+- Статусы
+  - Показ счётчиков и времени индексации; кнопки «Обновить изменённые».
+
+* Конфигурация (defgroup atlas)
+- Индексация и хранение
+  - atlas-index-ttl (float), atlas-exclude-dirs (list regexp)
+  - atlas-max-file-size (int), atlas-hash-content (bool)
+  - atlas-store-compressed (bool), atlas-segment-threshold (int)
+- Качество/баланс
+  - atlas-elisp-use-elisp-refs (bool), atlas-elisp-refs-max-size (int)
+  - atlas-debounce-interval (float), atlas-parallel-limit (int)
+- План контекста
+  - atlas-plan-default-budget (int), atlas-plan-model (symbol)
+
+* Производительность и устойчивость
+- Ленивые индексы; кэширование inv-index; сегментация и gzip при больших размерах.
+- Инкрементальность по файловому признаку (mtime/size/hash).
+- Ограничение веса батчей и времени одного тика; отменяемые задачи; детерминированность.
+- Фильтры/исключения: vendor/build/.git; пропуск больших двоичных/сгенерированных файлов.
+
+* Безопасность и приватность
+- Оффлайн по умолчанию; внешние источники только по явному включению.
+- Хранение только локально в проекте; нет отправки исходников.
+- Журналы и дампы не содержат секретов сверх необходимого.
+
+* Версионирование и миграции
+- meta.sexp :schema INT — версия схемы.
+- Мигратор: при обнаружении старой версии — преобразование в новую без потери ключевых полей.
+- Внутренние ключи неизменны (id); при расширении — добавляются новые поля, старые сохраняются.
+
+* Алгоритмы ретрива и «рюкзак» контекста
+- Ретривал
+  - Токенизация запроса → поиск в inv-index (name>sig>doc1>path).
+  - Слияние кандидатов, rerank (точные совпадения имён, близость токенов, частота).
+  - Расширение по графу: 1 hop require/provide (в v1), лимиты по степени.
+- Упаковка
+  - Для символов: сигнатура + doc1 + N строк вокруг определения; для файлов: короткий summary/шапка.
+  - Дедупликация по файлу/спану; оценка токенов; отсев до бюджета.
+- Представления для LLM
+  - brief: список выбранных символов/фрагментов с краткими полями.
+  - rich: дополнительно связи/причины/оценка.
+
+* Тестирование (ERT) и качество
+- Тесты ядра (pure):
+  - Токенизация/инвертированный индекс; скоринг; упаковщик контекста; генерация id; миграции.
+- Тесты индексации (файловые фикстуры):
+  - Разбор defun/defvar/defcustom; require/provide; инкрементальность; большие файлы/исключения.
+- Тесты интеграции:
+  - atlas-index → atlas-query → atlas-plan-context; стабильность форматов; события.
+- Критерии успеха:
+  - p95 индексирования и запросов; точность top-k; снижение токенов на задачу; отсутствие UI-фризов.
+
+* Риски и контрмеры
+- Большие монорепы → сегментация, ленивые индексы, дебаунс, частичные планы.
+- Неполные данные → устойчивые схемы, мягкие деградации, отчётливые ошибки.
+- Неточность call/ref (elisp) → ограничить по умолчанию к require/provide, включать elisp-refs вручную.
+- Дрейф форматов → жёсткая фиксация схемы, миграции, ERT на сериализацию.
+
+* Дорожная карта
+- M0 (ядро хранения и API)
+  - Формат .context/atlas/v1; meta/files/symbols/edges; elisp-source L0/L1/L2; atlas-index/stats/open/close; события.
+- M1 (ретривал и план)
+  - inv-index; atlas-query; atlas-plan-context (рюкзак); интеграция с lore (getter atlas).
+- M2 (инкрементальность и UX)
+  - watch-mode; сегментация/gzip; экспорт в Context Navigator; atlas-explore; опц. elisp-refs.
+- M3 (внешние источники)
+  - lsp-source (documentSymbol, references, callHierarchy где есть); ctags-source; merge-политики.
+- M4 (JS/TS/Haskell)
+  - Подключение соответствующих источников; расширение kinds/edges; документация по интеграции.
+
+* Приложение A: Примеры записей
+- Символ
+  #+begin_src emacs-lisp
+  (:id "elisp:lisp/foo.el#bar@120-260/function"
+   :file "lisp/foo.el"
+   :name "bar"
+   :kind function
+   :beg 120 :end 260
+   :sig "(defun bar (x y) ...)"
+   :doc1 "Return combined value of X and Y."
+   :exported? t
+   :source elisp)
+ #+end_src
+- Ребро
+  #+begin_src emacs-lisp
+  (:type require :from "feature:foo-core" :to "feature:foo-utils" :weight 1.0 :source elisp)
+  #+end_src
+
+* Приложение B: Контракты источников (providers)
+- Интерфейс fn
+  - Вызов: (FN :root ROOT :changed PATHS :emit EMIT :done DONE :opts OPTS)
+  - EMIT принимает alist батчей: (:files LIST) (:symbols LIST) (:edges LIST) (:summaries LIST)
+  - DONE вызывается один раз в конце; провайдер обязан быть идемпотентным и не бросать ошибок наружу.
+- Регистрация
+  - (atlas-register-source NAME :capabilities CAPS :fn FN :cost COST)
+  - :cost — эвристический вес «дороговизны» источника; используется планировщиком.
+- Политика мержа
+  - При конфликте одинаковых id — приоритет более «надёжного» источника для данного языка (в v1: elisp > прочие).
+  - Все объекты сохраняют :source; при экспорте можно фильтровать по источнику/качеству.
+
+* Приложение C: Представления для LLM
+- brief (упрощённое)
+  #+begin_src json
+  {
+    "query": "fix foo: wrong arg order",
+    "top": [
+      {"type":"symbol","id":"elisp:lisp/foo.el#foo@80-200/function","sig":"(defun foo (y x) ...)",
+       "doc1":"Return processed pair.","file":"lisp/foo.el","range":[80,200]}
+    ],
+    "imports": ["feature:foo-core","feature:foo-utils"],
+    "notes": "Prefer foo and callers; check require chain."
+  }
+ #+end_src
+- rich (с причинами/оценкой)
+  #+begin_src emacs-lisp
+  (:query "fix foo arg order"
+   :items ((:why "name match foo; arg order suspected"
+            :symbol "elisp:lisp/foo.el#foo@80-200/function"
+            :span (:file "lisp/foo.el" :beg 80 :end 140)
+            :tokens 120))
+   :est-tokens 380
+   :files ("lisp/foo.el"))
+#+end_src
+
+* Заключение
+- Atlas — чистое ядро Emacs-карты проекта: простой версионированный формат, модульные источники, быстрый ретривал и план контекста. Он самодостаточен и при этом открыт для расширений (LSP/ctags/внешние сервисы).
+- Следуя гармонии Дао и CODESTYLE.org, на этой спецификации реализуется первая версия, пригодная для повседневной работы и роста к полиглотным проектам.
