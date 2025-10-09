@@ -8,6 +8,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'atlas-log)
 (require 'atlas)
 (require 'atlas-index)
 
@@ -23,6 +24,7 @@
   "Handle file-notify EVENT for ROOT."
   (let* ((file (cadr event)))
     (when (and (stringp file) (string-match-p "\\.el\\'" file))
+      (atlas-log :debug "watch:event root=%s file=%s ev=%S" root file event)
       (atlas-index-async root :changed (list (atlas-watch--rel root file))))))
 
 (defun atlas-watch-start (root)
@@ -34,7 +36,8 @@
         (let ((desc (file-notify-add-watch
                      root '(change attribute-change)
                      (lambda (ev) (atlas-watch--on-event root ev)))))
-          (puthash root desc atlas-watch--watches))))
+          (puthash root desc atlas-watch--watches)
+          (atlas-log :info "watch:start root=%s desc=%S" root desc))))
     t))
 
 (defun atlas-watch-stop (root)
@@ -42,6 +45,7 @@
   (let* ((root (file-name-as-directory (expand-file-name root)))
          (desc (gethash root atlas-watch--watches)))
     (when desc
+      (atlas-log :info "watch:stop root=%s desc=%S" root desc)
       (ignore-errors (file-notify-rm-watch desc))
       (remhash root atlas-watch--watches))
     t))

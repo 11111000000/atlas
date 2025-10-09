@@ -11,6 +11,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'atlas-log)
 
 (declare-function atlas-root-dir "atlas" (root))
 (declare-function atlas--symbol-id "atlas" (&key lang rel name beg end kind))
@@ -30,7 +31,9 @@
     (dolist (path (directory-files-recursively root "\\.el\\'" nil))
       (unless (atlas-elisp--excluded-dir-p path)
         (push path files)))
-    (nreverse files)))
+    (setq files (nreverse files))
+    (atlas-log :debug "elisp:list-files root=%s total=%d" root (length files))
+    files))
 
 (defun atlas-elisp--normalize-paths (root paths)
   "Normalize PATHS (relative or absolute) to a list of absolute .el files under ROOT that exist."
@@ -149,10 +152,12 @@ CHANGED may be :auto, nil, or a list of paths (relative or absolute)."
          (paths (if (and (listp changed) changed)
                     (atlas-elisp--normalize-paths root changed)
                   (atlas-elisp--list-files root))))
+    (atlas-log :info "elisp:run root=%s changed=%S paths=%d" root changed (length paths))
     ;; L0 files (inventory) only on full run (no explicit CHANGED list)
     (when (not (and (listp changed) changed))
       (let ((files (mapcar (lambda (p) (atlas-elisp--file-entry root p)) paths)))
-        (funcall emit (list :files files))))
+        (atlas-log :debug "elisp:L0 emit files=%d" (length files))
+        (funcall emit (list (cons :files files)))))
     ;; L1/L2 per file (batch by file to keep memory modest)
     (dolist (path paths)
       (condition-case err
@@ -162,11 +167,14 @@ CHANGED may be :auto, nil, or a list of paths (relative or absolute)."
                             (buffer-substring-no-properties (point-min) (point-max))))
                  (symbols (atlas-elisp--scan-symbols rel content))
                  (edges (atlas-elisp--scan-requires rel content)))
-            (funcall emit (list :file rel :symbols symbols :edges edges)))
-        (error (message "atlas-elisp-source error on %s: %S" path err)))))
+            (atlas-log :trace "elisp:L1/L2 file=%s symbols=%d edges=%d" rel (length symbols) (length edges))
+            (funcall emit (list (cons :file rel) (cons :symbols symbols) (cons :edges edges))))
+        (error
+         (atlas-log :error "elisp:error path=%s err=%S" path err)))))
   (when (functionp done) (funcall done)))
 
 ;; Register by default
+(atlas-log :info "elisp:provider loading; will register default source")
 (require 'atlas-sources)
 (atlas-register-source 'elisp
                        :capabilities (list :languages '(elisp)

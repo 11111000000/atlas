@@ -16,7 +16,10 @@
 (require 'seq)
 (require 'map)
 (require 'subr-x)
+(require 'atlas-log)
 (require 'atlas-store)
+(require 'atlas-sources)      ; registry/runner
+(require 'atlas-source-elisp) ; default built-in provider (v1)
 
 ;; Forward decls to avoid cycles
 (declare-function atlas-run-sources "atlas-sources"
@@ -204,9 +207,21 @@ If FULL-OR-CHANGED is a list of paths, reindex only changed files."
                    (t :auto)))
          (emit (lambda (batch)
                  ;; batch: (:file REL?) (:files LIST) (:symbols LIST) (:edges LIST) (:summaries LIST)
-                 (let ((fs (alist-get :files batch))
-                       (ss (alist-get :symbols batch))
-                       (es (alist-get :edges batch)))
+                 (let* ((batch (if (and (listp batch) (keywordp (car batch)))
+                                   (progn
+                                     (atlas-log :warn "index:emit got plist batch; converting to alist")
+                                     (let ((pl batch) (acc nil))
+                                       (while pl
+                                         (push (cons (car pl) (cadr pl)) acc)
+                                         (setq pl (cddr pl)))
+                                       (nreverse acc)))
+                                 batch))
+                        (fs (alist-get :files batch))
+                        (ss (alist-get :symbols batch))
+                        (es (alist-get :edges batch))
+                        (rel (alist-get :file batch)))
+                   (atlas-log :trace "index:emit file=%s files=%d symbols=%d edges=%d"
+                              (or rel "-") (length fs) (length ss) (length es))
                    (cl-incf files-acc (length fs))
                    (cl-incf symbols-acc (length ss))
                    (cl-incf edges-acc (length es))
@@ -219,10 +234,56 @@ If FULL-OR-CHANGED is a list of paths, reindex only changed files."
                      (let ((st (atlas-state root)))
                        (when st (atlas-model-merge-batch st batch)))))))
          (done (lambda () t)))
+    (atlas-log :info "index:start root=%s full?=%s arg=%S" root full? full-or-changed)
     (atlas-events-publish :atlas-index-start :root root :full (and full? t))
     ;; Reset inv-index readiness on new index run
     (plist-put state :inv-index-ready? nil)
     (atlas--set-state root state)
+    ;; Ensure at least one provider is registered; try to load built-ins on demand.
+    (atlas-log :debug "index:providers before require count=%d" (length atlas--sources))
+    (atlas-log :debug "index:features pre featurep sources=%s elisp=%s"
+               (featurep 'atlas-sources) (featurep 'atlas-source-elisp))
+    (atlas-log :debug "index:locate libs sources=%s elisp=%s"
+               (ignore-errors (locate-library "atlas-sources")) (ignore-errors (locate-library "atlas-source-elisp")))
+    ;; Add <root>/lisp to load-path for local development if present.
+    (let* ((lp (expand-file-name "lisp" root)))
+      (when (and (file-directory-p lp) (not (member lp load-path)))
+        (add-to-list 'load-path lp)
+        (atlas-log :debug "index:add-to-load-path %s" lp)))
+    ;; Ensure registry is loaded
+    (condition-case err
+        (require 'atlas-sources)
+      (error (atlas-log :error "index:require atlas-sources error: %S" err)))
+    (atlas-log :debug "index:after require atlas-sources featurep=%s" (featurep 'atlas-sources))
+    ;; Try to load built-in elisp provider if none registered yet
+    (atlas-log :debug "index:atlas--sources null?=%s type=%s" (null atlas--sources) (type-of atlas--sources))
+    (when (null atlas--sources)
+      (condition-case err2
+          (progn
+            (atlas-log :info "index:requiring built-in provider atlas-source-elisp…")
+            (require 'atlas-source-elisp)
+            (atlas-log :debug "index:after require atlas-source-elisp featurep=%s locate=%s"
+                       (featurep 'atlas-source-elisp) (ignore-errors (locate-library "atlas-source-elisp"))))
+        (error (atlas-log :error "index:require atlas-source-elisp error: %S" err2))))
+    ;; Fallback: if provider function is present but registry is still empty, register manually
+    (when (and (null atlas--sources) (fboundp 'atlas-elisp-source-run))
+      (condition-case err3
+          (progn
+            (require 'atlas-sources)
+            (atlas-log :warn "index:fallback registering elisp provider manually")
+            (atlas-register-source 'elisp
+                                   :capabilities (list :languages '(elisp)
+                                                       :kinds '(files symbols edges summaries)
+                                                       :levels '(L0 L1 L2 L3))
+                                   :fn #'atlas-elisp-source-run
+                                   :cost 1.0))
+        (error (atlas-log :error "index:fallback register error: %S" err3))))
+    (atlas-log :debug "index:providers after require count=%d" (length atlas--sources))
+    (when (null atlas--sources)
+      (atlas-events-publish :atlas-index-error :root root :reason 'no-sources)
+      (atlas-log :warn "index:no providers registered; try (require 'atlas-source-elisp)")
+      (message "atlas-index: no providers registered; try (require 'atlas-source-elisp)"))
+    (atlas-log :info "index:run-sources root=%s changed=%S" root changed)
     (atlas-run-sources root :changed changed :opts nil :emit emit :done done
                        :kinds '(files symbols edges summaries) :levels '(L0 L1 L2 L3) :languages '(elisp))
     (funcall done)
@@ -231,6 +292,8 @@ If FULL-OR-CHANGED is a list of paths, reindex only changed files."
            (files (or (and cur (plist-get cur :files)) files-acc))
            (symbols (or (and cur (plist-get cur :symbols)) symbols-acc))
            (edges (or (and cur (plist-get cur :edges)) edges-acc)))
+      (atlas-log :info "index:counts files=%d symbols=%d edges=%d (emitted=%d/%d/%d)"
+                 files symbols edges files-acc symbols-acc edges-acc)
       (setf state (atlas--update-meta-counts state files symbols edges)))
     (atlas-store-save-meta root (plist-get state :meta))
     (plist-put state :last-index-at (atlas--now))

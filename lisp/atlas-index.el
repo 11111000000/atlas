@@ -8,6 +8,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'atlas-log)
 (require 'atlas)
 (require 'atlas-sources)
 (require 'atlas-store)
@@ -22,10 +23,13 @@
 CHANGED may be :full or a list of paths (relative or absolute). When finished, DONE is called."
   (let* ((token (format "atlas-%s-%f" (md5 root) (float-time)))
          (timer nil))
+    (atlas-log :info "index-async:schedule root=%s changed=%S token=%s delay=%s"
+               root changed token (or atlas-debounce-interval 0.2))
     (setq timer
           (run-at-time atlas-debounce-interval nil
                        (lambda ()
                          (remhash token atlas--async-tasks)
+                         (atlas-log :debug "index-async:start token=%s root=%s changed=%S" token root changed)
                          (condition-case err
                              (progn
                                (let ((arg (cond
@@ -33,13 +37,20 @@ CHANGED may be :full or a list of paths (relative or absolute). When finished, D
                                            ((listp changed) changed)
                                            (t nil))))
                                  (atlas-index root arg))
-                               (when (functionp done) (funcall done)))
-                           (error (message "atlas-index-async error: %S" err))))))
+                               (when (functionp done) (funcall done))
+                               (atlas-log :info "index-async:done token=%s" token))
+                           (error
+                            (atlas-log :error "index-async:error token=%s err=%S" token err)
+                            (message "atlas-index-async error: %S" err))))))
     (puthash token timer atlas--async-tasks)
     (list :token token
           :cancel (lambda ()
                     (let ((tm (gethash token atlas--async-tasks)))
-                      (when tm (cancel-timer tm) (remhash token atlas--async-tasks) t))))))
+                      (when tm
+                        (atlas-log :warn "index-async:cancel token=%s" token)
+                        (cancel-timer tm)
+                        (remhash token atlas--async-tasks)
+                        t))))))
 
 (defun atlas-update (root paths)
   "Update Atlas for ROOT restricted to PATHS (list of relative or absolute)."
@@ -48,6 +59,7 @@ CHANGED may be :full or a list of paths (relative or absolute). When finished, D
                        (split-string s "[ \t]+" t))))
   ;; Route as changed-only run with given PATHS.
   (let ((changed (and (listp paths) paths)))
+    (atlas-log :info "update: root=%s paths=%d" root (length changed))
     (atlas-index root changed)
     t))
 

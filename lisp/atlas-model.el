@@ -10,6 +10,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'atlas-store)
+(require 'atlas-log)
 
 ;; Index keys inside state :indexes plist
 (defconst atlas-model--k-files-idx :files-idx)
@@ -201,6 +202,8 @@ Symbols and edges are replaced per file REL."
          (symbols (alist-get :symbols batch))
          (edges (alist-get :edges batch))
          (rel (alist-get :file batch)))
+    (atlas-log :trace "model:merge-batch rel=%s files=%d symbols=%d edges=%d"
+               (or rel "-") (length files) (length symbols) (length edges))
     (when files
       (atlas-model--set-files state files))
     (when rel

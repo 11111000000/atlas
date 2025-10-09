@@ -14,6 +14,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'atlas-log)
 
 (declare-function atlas-root-dir "atlas" (root))
 
@@ -92,6 +93,8 @@ then append new ones."
          (edges (alist-get :edges batch))
          (sums (alist-get :summaries batch))
          (rel (alist-get :file batch)))
+    (atlas-log :debug "store:save-batch root=%s rel=%s files=%d symbols=%d edges=%d sums=%d"
+               root (or rel "-") (length files) (length symbols) (length edges) (length sums))
     ;; Files: if provided, overwrite inventory
     (when files
       (atlas-store-save-files root files))
@@ -116,9 +119,11 @@ then append new ones."
 
 (defun atlas-store-counts (root)
   "Return current counts in store for ROOT as plist :files :symbols :edges."
-  (list :files (length (atlas-store-load-files root))
-        :symbols (length (atlas-store-load-symbols root))
-        :edges (length (atlas-store-load-edges root))))
+  (let* ((files (length (atlas-store-load-files root)))
+         (symbols (length (atlas-store-load-symbols root)))
+         (edges (length (atlas-store-load-edges root))))
+    (atlas-log :debug "store:counts root=%s files=%d symbols=%d edges=%d" root files symbols edges)
+    (list :files files :symbols symbols :edges edges)))
 
 (provide 'atlas-store)
 

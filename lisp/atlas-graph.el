@@ -7,6 +7,7 @@
 
 (require 'cl-lib)
 (require 'seq)
+(require 'atlas-log)
 (require 'atlas)
 (require 'atlas-model)
 
@@ -31,6 +32,8 @@ Returns alist (:nodes LIST :edges LIST). SELECTOR may be file REL, symbol id, or
           (lambda (e)
             (when (or (null edge-types) (member (plist-get e :type) edge-types))
               (push e edges-acc)))))
+    (atlas-log :info "graph: root=%s starts=%d depth=%d edge-types=%S"
+               root (length starts) depth edge-types)
     (cl-labels ((step (front d)
                       (when (and front (>= d 0))
                         (let ((next '()))
@@ -50,8 +53,10 @@ Returns alist (:nodes LIST :edges LIST). SELECTOR may be file REL, symbol id, or
                                   (push from next)))))
                           (step (seq-uniq next) (1- d))))))
       (step starts depth))
-    (list :nodes (let (acc) (maphash (lambda (k _v) (push k acc)) visited) (nreverse acc))
-          :edges (nreverse (seq-uniq edges-acc))))))
+    (let* ((nodes (let (acc) (maphash (lambda (k _v) (push k acc)) visited) (nreverse acc)))
+           (edges (nreverse (seq-uniq edges-acc))))
+      (atlas-log :debug "graph: result nodes=%d edges=%d" (length nodes) (length edges))
+      (list :nodes nodes :edges edges))))
 
 (provide 'atlas-graph)
 

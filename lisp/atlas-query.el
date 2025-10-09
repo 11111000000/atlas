@@ -9,6 +9,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'atlas-log)
 (require 'atlas)
 (require 'atlas-model)
 
@@ -26,6 +27,7 @@ KINDS and FILTERS are reserved."
          (inv (atlas-model-ensure-inv-index state))
          (scores (make-hash-table :test #'equal))
          (k (or k 10)))
+    (atlas-log :info "query: root=%s q=%S tokens=%d k=%d" root keywords (length terms) k)
     (when (and inv terms)
       (dolist (tkn terms)
         (let ((vec (gethash tkn inv)))
@@ -49,6 +51,7 @@ KINDS and FILTERS are reserved."
            (push (cons id score) pairs)))
        scores)
       (setq pairs (seq-take (seq-sort-by #'cdr #'> pairs) k))
+      (atlas-log :debug "query: candidates=%d returned=%d" (hash-table-count scores) (length pairs))
       (mapcar
        (lambda (p)
          (let* ((id (car p))
