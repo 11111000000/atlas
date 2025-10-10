@@ -39,12 +39,18 @@ Atlas is a universal, extensible “project map” module for Emacs. It builds a
 (require 'atlas-lore)       ;; lore.el getter (optional)
 #+end_src
 
+#+RESULTS:
+: atlas-lore
+
 2) Index your current project
 #+begin_src emacs-lisp
 (let ((root default-directory))
   (atlas-index root t)       ;; full rebuild
   (atlas-stats root))        ;; => plist with counts and schema
 #+end_src
+
+#+RESULTS:
+| :files | 0 | :symbols | 0 | :edges | 0 | :t-indexed | 3.1948089599609375e-05 | :schema | 1 |
 
 3) Search (lexical)
 #+begin_src emacs-lisp

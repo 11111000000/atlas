@@ -21,9 +21,14 @@
   :group 'atlas
   :prefix "atlas-elisp-")
 
-(defun atlas-elisp--excluded-dir-p (name)
-  (seq-some (lambda (re) (string-match-p re name))
-            (bound-and-true-p atlas-exclude-dirs)))
+(defun atlas-elisp--excluded-dir-p (path)
+  "Return non-nil if PATH is under an excluded directory according to atlas-exclude-dirs."
+  (let* ((dir (file-name-directory path))
+         (components (and dir (split-string (directory-file-name dir) "/" t))))
+    (seq-some
+     (lambda (re)
+       (seq-some (lambda (d) (string-match-p re d)) components))
+     (bound-and-true-p atlas-exclude-dirs))))
 
 (defun atlas-elisp--list-files (root)
   "List .el files under ROOT respecting excludes."
@@ -68,23 +73,33 @@
 (defun atlas-elisp--scan-requires (rel content)
   "Return list of (:type ... :from :to ...) edges for require/provide in CONTENT, bound to REL file."
   (let ((edges nil))
-    (save-match-data
-      (with-temp-buffer
-        (insert content)
-        (goto-char (point-min))
-        (while (re-search-forward "(provide\\s-+'\\([^)\\s-]+\\))" nil t)
-          (push (list :type 'provide
-                      :from rel
-                      :to (format "feature:%s" (match-string 1))
-                      :weight 1.0 :source 'elisp)
-                edges))
-        (goto-char (point-min))
-        (while (re-search-forward "(require\\s-+'\\([^)\\s-]+\\))" nil t)
-          (push (list :type 'require
-                      :from rel
-                      :to (format "feature:%s" (match-string 1))
-                      :weight 1.0 :source 'elisp)
-                edges))))
+    (condition-case _
+        (with-temp-buffer
+          (insert content)
+          (goto-char (point-min))
+          (condition-case _eof
+              (while t
+                (let* ((form (read (current-buffer))))
+                  (when (and (consp form)
+                             (memq (car form) '(provide require)))
+                    (let* ((head (car form))
+                           (raw (cadr form))
+                           (sym (cond
+                                 ;; (require 'foo) / (provide 'foo)
+                                 ((and (consp raw) (eq (car raw) 'quote) (symbolp (cadr raw))) (cadr raw))
+                                 ;; (require foo) — допустимо
+                                 ((symbolp raw) raw)
+                                 ;; (require "foo") — возьмём basename строки
+                                 ((stringp raw) (intern (file-name-base raw)))
+                                 (t nil))))
+                      (when (symbolp sym)
+                        (push (list :type (if (eq head 'provide) 'provide 'require)
+                                    :from rel
+                                    :to (format "feature:%s" (symbol-name sym))
+                                    :weight 1.0 :source 'elisp)
+                              edges))))))
+            (end-of-file nil)))
+      (error nil))
     (nreverse edges)))
 
 (defun atlas-elisp--doc1 (form)

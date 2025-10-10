@@ -38,7 +38,7 @@
   "Time-to-live in seconds before re-index is considered stale."
   :type 'number :group 'atlas)
 
-(defcustom atlas-exclude-dirs '("\\.git\\'" "node_modules\\'" "build\\'" "dist\\'" "vendor\\'")
+(defcustom atlas-exclude-dirs '("\\.git\\'" "\\.context\\'" "node_modules\\'" "build\\'" "dist\\'" "vendor\\'")
   "List of directory regexps to exclude during inventory."
   :type '(repeat regexp) :group 'atlas)
 
