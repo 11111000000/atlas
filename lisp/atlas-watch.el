@@ -12,6 +12,11 @@
 (require 'atlas)
 (require 'atlas-index)
 
+(defcustom atlas-watch-file-regexp "\\.el\\'"
+  "Regexp of files that trigger reindex in watch events.
+Default targets Emacs Lisp; set to a broader or language-specific pattern when adding providers."
+  :type 'regexp :group 'atlas)
+
 (defvar atlas-watch--watches (make-hash-table :test #'equal)
   "Root → file-notify watch descriptor.")
 
@@ -23,7 +28,9 @@
 (defun atlas-watch--on-event (root event)
   "Handle file-notify EVENT for ROOT."
   (let* ((file (cadr event)))
-    (when (and (stringp file) (string-match-p "\\.el\\'" file))
+    (when (and (stringp file)
+               (let ((re (or (bound-and-true-p atlas-watch-file-regexp) "\\.el\\'")))
+                 (string-match-p re file)))
       (atlas-log :debug "watch:event root=%s file=%s ev=%S" root file event)
       (atlas-index-async root :changed (list (atlas-watch--rel root file))))))
 

@@ -57,15 +57,21 @@ KINDS and FILTERS are reserved."
          (let* ((id (car p))
                 (score (cdr p))
                 (sym (atlas-model-get-symbol state id))
-                (rel (and sym (plist-get sym :file)))
+                (rel (or (and sym (plist-get sym :file))
+                         ;; Fallback: derive REL from id "LANG:REL#NAME@BEG-END/KIND"
+                         (and (stringp id)
+                              (let* ((c (string-match ":" id))
+                                     (h (and c (string-match "#" id))))
+                                (when (and c h (> h (1+ c)))
+                                  (substring id (1+ c) h))))))
                 (beg (or (and sym (plist-get sym :beg)) 0))
                 (end (or (and sym (plist-get sym :end)) 0)))
-           (list :type 'symbol
-                 :id id :score score
-                 :file rel :range (cons beg end)
-                 :name (plist-get sym :name)
-                 :sig (plist-get sym :sig)
-                 :doc1 (plist-get sym :doc1))))
+           (list (cons :type 'symbol)
+                 (cons :id id) (cons :score score)
+                 (cons :file rel) (cons :range (cons beg end))
+                 (cons :name (and sym (plist-get sym :name)))
+                 (cons :sig (and sym (plist-get sym :sig)))
+                 (cons :doc1 (and sym (plist-get sym :doc1))))))
        pairs))))
 
 (provide 'atlas-query)

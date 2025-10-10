@@ -2,6 +2,7 @@
 #+author: Peter Kosov <11111000000@email.com>
 #+language: en
 #+startup: show2levels
+[[https://github.com/11111000000/atlas/actions/workflows/ci.yml/badge.svg][CI status]]
 
 * Overview
 Atlas is a universal, extensible “project map” module for Emacs. It builds and uses a structured map of your project: file inventory, symbols, dependencies, lightweight summaries, fast retrieval, and context planning for tasks and LLMs.
@@ -72,8 +73,7 @@ Atlas is a universal, extensible “project map” module for Emacs. It builds a
                        :topk 10
                        :emit (lambda (item) (message "atlas→ %S" item))
                        :done (lambda () (message "atlas done")))
-#+end_src
-
+                       #+end_src
 * Key Features (v1)
 - Emacs Lisp-first map
   - L0 inventory of .el files (size, mtime, lang)
@@ -214,13 +214,15 @@ Atlas is a universal, extensible “project map” module for Emacs. It builds a
 - Keep byte-compiler warnings at zero
 
 * Testing
-- Load tests and run:
+- With Nix/Flakes:
+  - nix run .#tests
+  - nix flake check -L
+- Without Nix (vanilla Emacs):
 #+begin_src emacs-lisp
-(load (expand-file-name "test/test-atlas-events.el" "/home/az/Code/atlas"))
-(load (expand-file-name "test/test-atlas-query.el" "/home/az/Code/atlas"))
-(ert-run-tests-batch-and-exit)
+(load (expand-file-name "test/ert-runner.el" "/home/az/Code/atlas"))
+;; or:
+;; emacs -Q --batch -L lisp -l test/ert-runner.el
 #+end_src
-
 * FAQ
 - Does Atlas send my code anywhere?
   - No. Atlas is offline by default; data lives under =.context/atlas/v1=.

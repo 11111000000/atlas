@@ -11,6 +11,10 @@
 (require 'subr-x)
 (require 'atlas-store)
 (require 'atlas-log)
+(require 'ucs-normalize nil t)
+
+(defvar atlas-unicode-tokens nil)
+(defvar atlas-tokenize-camelcase nil)
 
 ;; Index keys inside state :indexes plist
 (defconst atlas-model--k-files-idx :files-idx)
@@ -184,20 +188,53 @@
       (atlas-model--build-inv-index state))))
 
 (defun atlas-model--tokens (s)
-  "Tokenize string S to lowercase [a-z0-9_]+ chunks.
-Returns list of tokens or nil."
-  (when (and s (stringp s) (> (length s) 0))
+  "Tokenize string S. Default: lowercase ASCII [a-z0-9_]+.
+If `atlas-unicode-tokens' is non-nil, normalize (NFKC), use [[:word:]]+ on original case,
+then downcase tokens; when `atlas-tokenize-camelcase' is also non-nil, split CamelCase into sub-tokens."
+  (when (and (stringp s) (> (length s) 0))
     (let ((res '()))
-      (with-temp-buffer
-        (insert (downcase s))
-        (goto-char (point-min))
-        (while (re-search-forward "[a-z0-9_]+" nil t)
-          (push (match-string 0) res)))
+      (if (bound-and-true-p atlas-unicode-tokens)
+          ;; Unicode-aware path with optional CamelCase splitting
+          (let* ((norm (if (fboundp 'ucs-normalize-NFKC-string)
+                           (ucs-normalize-NFKC-string s)
+                         s)))
+            (with-temp-buffer
+              (insert norm)
+              (goto-char (point-min))
+              (while (re-search-forward "[[:word:]]+" nil t)
+                (let* ((raw (match-string 0))
+                       (low (downcase raw)))
+                  ;; Always keep the downcased full token
+                  (push low res)
+                  ;; Optionally add CamelCase sub-tokens (ASCII heuristic)
+                  (when (bound-and-true-p atlas-tokenize-camelcase)
+                    (let ((len (length raw))
+                          (start 0))
+                      (dotimes (i len)
+                        (when (and (> i 0)
+                                   (let ((prev (aref raw (1- i)))
+                                         (cur  (aref raw i)))
+                                     (and (>= prev ?a) (<= prev ?z)
+                                          (>= cur  ?A) (<= cur  ?Z))))
+                          (let ((part (substring raw start i)))
+                            (when (> (length part) 0)
+                              (push (downcase part) res)))
+                          (setq start i)))
+                      (let ((last (substring raw start)))
+                        (when (> (length last) 0)
+                          (push (downcase last) res)))))))))
+        ;; Legacy ASCII path
+        (with-temp-buffer
+          (insert (downcase s))
+          (goto-char (point-min))
+          (while (re-search-forward "[a-z0-9_]+" nil t)
+            (push (match-string 0) res))))
       (nreverse (atlas-model--dedup-list res)))))
 
 (cl-defun atlas-model-merge-batch (state batch)
   "Merge BATCH into STATE indexes. BATCH may include :files :symbols :edges and :file REL.
-Symbols and edges are replaced per file REL."
+Symbols and edges are replaced per file REL. Without REL, symbols are appended
+and edges are appended grouped by their :from key."
   (let* ((files (alist-get :files batch))
          (symbols (alist-get :symbols batch))
          (edges (alist-get :edges batch))
@@ -218,7 +255,16 @@ Symbols and edges are replaced per file REL."
     (when (and (not rel) symbols)
       ;; No rel provided, just index symbols (append-only)
       (dolist (sym symbols) (atlas-model--index-symbol state sym)))
+    (when (and (not rel) edges)
+      ;; Append edges by :from key and rebuild edges-in
+      (let ((out (atlas-model--get-idx state atlas-model--k-edges-out)))
+        (dolist (e edges)
+          (let ((from (plist-get e :from)))
+            (when from
+              (atlas-model--push out from e))))
+        (atlas-model--rebuild-edges-in state)))
     (when (or symbols edges)
+      ;; Edges don't affect inv-index, but keep behavior consistent
       (atlas-model--clear-inv state)))
   state)
 

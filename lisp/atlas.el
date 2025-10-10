@@ -19,7 +19,7 @@
 (require 'atlas-log)
 (require 'atlas-store)
 (require 'atlas-sources)      ; registry/runner
-(require 'atlas-index)        ; async helpers and change detection
+;; (require 'atlas-index)     ; avoid circular require; see forward decls below
 (require 'atlas-source-elisp) ; default built-in provider (v1)
 
 ;; Forward decls to avoid cycles
@@ -28,6 +28,7 @@
 (declare-function atlas-query "atlas-query"
                   (root keywords &rest keys))
 (declare-function atlas-events-publish "atlas-events" (topic &rest args))
+(declare-function atlas-index--detect-changes "atlas-index" (root))
 
 (defgroup atlas nil
   "Universal project map for Emacs."
@@ -75,6 +76,16 @@
 (defcustom atlas-parallel-limit 4
   "Max parallel tasks used by providers."
   :type 'integer :group 'atlas)
+
+(defcustom atlas-unicode-tokens nil
+  "If non-nil, use Unicode-aware tokenization (NFKC + [[:word:]]+) instead of ASCII [a-z0-9_]+.
+Default nil keeps legacy ASCII behavior."
+  :type 'boolean :group 'atlas)
+
+(defcustom atlas-tokenize-camelcase nil
+  "If non-nil and `atlas-unicode-tokens' is enabled, split CamelCase tokens into sub-tokens.
+The original token remains; sub-tokens are added additionally."
+  :type 'boolean :group 'atlas)
 
 ;; Planning
 (defcustom atlas-plan-default-budget 1200
@@ -216,7 +227,10 @@ If nil, apply TTL/changed-only policy: full if TTL expired, else changed-only."
                    ;; Policy: TTL
                    (stale? nil)
                    ;; Compute changed-only list
-                   (t (atlas-index--detect-changes root))))
+                   (t (if (fboundp 'atlas-index--detect-changes)
+                          (atlas-index--detect-changes root)
+                        ;; Fallback: full rebuild when helper isn't loaded
+                        nil))))
          (emit (lambda (batch)
                  ;; batch: (:file REL?) (:files LIST) (:symbols LIST) (:edges LIST) (:summaries LIST)
                  (let* ((batch (if (and (listp batch) (keywordp (car batch)))
