@@ -17,8 +17,16 @@
 
 (require 'ert)
 
-;; Load individual test files named like "test-*.el"
-(dolist (f (directory-files (file-name-directory (or load-file-name buffer-file-name)) t "\\`test-.*\\.el\\'"))
-  (load f nil t))
+(defun atlas-test--load-dir (dir)
+  "Load all test-*.el files under DIR."
+  (when (and dir (file-directory-p dir))
+    (dolist (f (directory-files dir t "\\`test-.*\\.el\\'"))
+      (load f nil t))))
+
+(let* ((here (file-name-directory (or load-file-name buffer-file-name)))
+       (t-dir (expand-file-name "../t" here)))
+  ;; Load tests from current test/ and optional sibling t/
+  (atlas-test--load-dir here)
+  (atlas-test--load-dir t-dir))
 
 (ert-run-tests-batch-and-exit)
