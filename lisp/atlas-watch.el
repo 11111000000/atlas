@@ -52,12 +52,42 @@
 
 ;;;###autoload
 (define-minor-mode atlas-watch-mode
-  "Toggle Atlas watch mode for the current default-directory."
+  "Toggle Atlas watch mode for the current default-directory.
+This affects only the current default-directory. For multiple roots,
+use `atlas-watch-add-root' and `atlas-watch-remove-root'."
   :global t
   :group 'atlas
   (if atlas-watch-mode
       (atlas-watch-start default-directory)
     (atlas-watch-stop default-directory)))
+
+;;;###autoload
+(defun atlas-watch-add-root (root)
+  "Start watching ROOT directory (adds to the current watch set)."
+  (interactive (list (read-directory-name "Watch root: " nil nil t)))
+  (atlas-watch-start root)
+  (message "Atlas watch added: %s" (file-name-as-directory (expand-file-name root))))
+
+;;;###autoload
+(defun atlas-watch-remove-root (root)
+  "Stop watching ROOT directory (removes from the current watch set)."
+  (interactive
+   (list (let* ((roots (atlas-watch-list-roots))
+                (choice (completing-read "Stop watching root: " roots nil t)))
+           choice)))
+  (atlas-watch-stop root)
+  (message "Atlas watch removed: %s" (file-name-as-directory (expand-file-name root))))
+
+;;;###autoload
+(defun atlas-watch-list-roots ()
+  "Return list of currently watched roots and echo them."
+  (interactive)
+  (let (acc)
+    (maphash (lambda (k _v) (push k acc)) atlas-watch--watches)
+    (setq acc (nreverse acc))
+    (when (called-interactively-p 'interactive)
+      (message "Atlas watched roots: %s" (if acc (mapconcat #'identity acc ", ") "<none>")))
+    acc))
 
 (provide 'atlas-watch)
 

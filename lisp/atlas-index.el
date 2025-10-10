@@ -7,6 +7,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'seq)
 (require 'subr-x)
 (require 'atlas-log)
 (require 'atlas)
@@ -17,6 +18,64 @@
 
 (defvar atlas--async-tasks (make-hash-table :test #'equal)
   "Root → timer object for running async index.")
+
+(defun atlas-index--excluded-dir-p (path)
+  "Return non-nil if PATH is under a directory matching atlas-exclude-dirs."
+  (let* ((dir (file-name-directory path))
+         (components (and dir (split-string (directory-file-name dir) "/" t))))
+    (seq-some
+     (lambda (re)
+       (seq-some (lambda (d) (string-match-p re d)) components))
+     (bound-and-true-p atlas-exclude-dirs))))
+
+(defun atlas-index--list-el-files (root)
+  "List absolute .el files under ROOT respecting excludes."
+  (let ((acc nil))
+    (dolist (p (directory-files-recursively root "\\.el\\'" nil))
+      (unless (atlas-index--excluded-dir-p p)
+        (push (expand-file-name p) acc)))
+    (nreverse acc)))
+
+(defun atlas-index--rel (root path)
+  "Return PATH relative to ROOT."
+  (string-remove-prefix (file-name-as-directory (expand-file-name root))
+                        (expand-file-name path)))
+
+(defun atlas-index--detect-changes (root)
+  "Return list of absolute paths of .el files changed since last inventory save."
+  (let* ((root (file-name-as-directory (expand-file-name root)))
+         (stored (ignore-errors (atlas-store-load-files root)))
+         (by-rel (let ((ht (make-hash-table :test #'equal)))
+                   (dolist (f stored)
+                     (let ((rel (plist-get f :path))) (when rel (puthash rel f ht))))
+                   ht))
+         (paths (atlas-index--list-el-files root))
+         (changed '()))
+    (dolist (abs paths)
+      (let* ((rel (atlas-index--rel root abs))
+             (attr (file-attributes abs))
+             (size (nth 7 attr))
+             (mtime (float-time (file-attribute-modification-time attr)))
+             (entry (and rel (gethash rel by-rel)))
+             (prev-mtime (and entry (plist-get entry :mtime)))
+             (prev-size (and entry (plist-get entry :size)))
+             (prev-hash (and entry (plist-get entry :hash)))
+             (need-hash? (and (bound-and-true-p atlas-hash-content)
+                              (numberp size)
+                              (<= size (or (bound-and-true-p atlas-max-file-size) most-positive-fixnum))))
+             (cur-hash (when need-hash?
+                         (ignore-errors
+                           (with-temp-buffer
+                             (insert-file-contents abs nil 0 size)
+                             (secure-hash 'sha256 (current-buffer))))))
+             (modified?
+              (or (null entry)
+                  (not (equal prev-size size))
+                  (not (equal prev-mtime mtime))
+                  (and need-hash? (not (equal prev-hash cur-hash))))))
+        (when modified?
+          (push abs changed))))
+    (nreverse changed)))
 
 (cl-defun atlas-index-async (root &key changed emit done)
   "Run indexing for ROOT asynchronously. Return plist with :token and :cancel.

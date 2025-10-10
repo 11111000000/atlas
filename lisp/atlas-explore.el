@@ -10,6 +10,40 @@
 (require 'atlas-query)
 (require 'atlas-plan)
 
+(defvar atlas-explore-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map (kbd "RET") #'atlas-explore-open-at-point)
+    (define-key map (kbd "o")   #'atlas-explore-open-at-point)
+    map)
+  "Keymap for `atlas-explore-mode'.")
+
+(define-derived-mode atlas-explore-mode special-mode "Atlas-Explore"
+  "Minor explorer for Atlas results.
+Keys:
+  RET/o  open item at point (file at position)
+  q      quit window (from `special-mode')."
+  :group 'atlas)
+
+(defun atlas-explore--open (root rel beg)
+  "Open REL (relative to ROOT) and go to BEG."
+  (let* ((abs (expand-file-name rel (file-name-as-directory root))))
+    (unless (file-exists-p abs)
+      (user-error "File does not exist: %s" abs))
+    (find-file abs)
+    (goto-char (or beg 1))
+    (recenter)))
+
+(defun atlas-explore-open-at-point ()
+  "Open item at point using text properties set by explorer."
+  (interactive)
+  (let* ((rel (get-text-property (point) 'atlas-rel))
+         (beg (get-text-property (point) 'atlas-beg))
+         (root (get-text-property (point) 'atlas-root)))
+    (if (and root rel)
+        (atlas-explore--open root rel beg)
+      (message "No item at point"))))
+
 ;;;###autoload
 (defun atlas-explore (root query &optional k)
   "Explore Atlas ROOT for QUERY and show results in a temp buffer."
@@ -24,13 +58,28 @@
       (erase-buffer)
       (insert (format "Atlas Explore — root: %s, query: %s, k=%d\n\n" root query k))
       (dolist (r results)
-        (insert (format "- %s  score=%s\n  file=%s  range=%S\n  sig=%s\n  doc1=%s\n\n"
-                        (or (alist-get :name r) (alist-get :id r))
-                        (alist-get :score r)
-                        (alist-get :file r)
-                        (alist-get :range r)
-                        (or (alist-get :sig r) "")
-                        (or (alist-get :doc1 r) "")))))
+        (let* ((name (or (alist-get :name r) (alist-get :id r)))
+               (score (alist-get :score r))
+               (rel (alist-get :file r))
+               (range (alist-get :range r))
+               (beg (or (car-safe range) 1))
+               (sig (or (alist-get :sig r) ""))
+               (doc1 (or (alist-get :doc1 r) "")))
+          (let ((line-start (point)))
+            (insert (format "- %s  score=%s  " name score))
+            (let ((btn-start (point)))
+              (insert-text-button "[Open]"
+                                  'help-echo "Open file at position"
+                                  'follow-link t
+                                  'action (lambda (_btn)
+                                            (atlas-explore--open root rel beg))))
+            (insert "\n")
+            (add-text-properties
+             line-start (point)
+             (list 'atlas-root root 'atlas-rel rel 'atlas-beg beg 'mouse-face 'highlight))
+            (insert (format "  file=%s  range=%S\n  sig=%s\n  doc1=%s\n\n"
+                            rel range sig doc1)))))
+      (atlas-explore-mode))
     (pop-to-buffer buf)))
 
 (cl-defun atlas-build-context-group (root query &key k budget model)

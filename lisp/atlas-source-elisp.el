@@ -62,11 +62,18 @@
   "Build file plist for PATH."
   (let* ((attr (file-attributes path))
          (size (nth 7 attr))
-         (mtime (float-time (file-attribute-modification-time attr))))
+         (mtime (float-time (file-attribute-modification-time attr)))
+         (hash (when (and (bound-and-true-p atlas-hash-content)
+                          (numberp size)
+                          (<= size (or (bound-and-true-p atlas-max-file-size) most-positive-fixnum)))
+                 (ignore-errors
+                   (with-temp-buffer
+                     (insert-file-contents path nil 0 size)
+                     (secure-hash 'sha256 (current-buffer)))))))
     (list :path (atlas-elisp--rel root path)
           :size size
           :mtime mtime
-          :hash nil
+          :hash hash
           :lang 'elisp
           :flags (list :generated? nil :vendor? nil))))
 
@@ -153,7 +160,7 @@ Positions are byte offsets within file contents."
                                                    :name name :beg beg :end end :kind (symbol-name kind))))
                         (push (list :id id :file rel :name name :kind kind
                                     :beg beg :end end :sig sig :doc1 doc1
-                                    :exported? nil :source 'elisp)
+                                    :exported? nil :source 'elisp :lang 'elisp)
                               symbols)))))
               (end-of-file eof))))
       (error nil))
