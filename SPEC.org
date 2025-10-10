@@ -14,9 +14,9 @@
   - Оффлайн по умолчанию; хранение локально в репозитории; уважение к производительности и UX Emacs.
 
 - Диалектика (тезис ↔ антитезис → синтез)
-- Тезис: полнота и точность (AST/LSP/Graph/резюме/эмбеддинги).
-- Антитезис: простота и скорость (инвентарь+rg/эвристики/консервативный парсинг).
-- Синтез: многоуровневая карта, инкрементальная, с деградациями и открытыми источниками; в v1 — Elisp-first, расширение к LSP/ctags/внешним сервисам.
+  - Тезис: полнота и точность (AST/LSP/Graph/резюме/эмбеддинги).
+  - Антитезис: простота и скорость (инвентарь+rg/эвристики/консервативный парсинг).
+  - Синтез: многоуровневая карта, инкрементальная, с деградациями и открытыми источниками; в v1 — Elisp-first, расширение к LSP/ctags/внешним сервисам.
 
 - Обзор возможностей (v1 → v2+)
 - v1 (Emacs Lisp)
@@ -26,16 +26,17 @@
     - L2 зависимости: require/provide (легковесный скан).
     - L3 краткие резюме — формат зарезервирован (хранилище поддерживает, наполнение отдельно).
   - Хранилище: версия схемы, meta/files/symbols/edges/summaries в sexp; опциональный gzip по суффиксу файла.
-  - Модель в памяти: индексы для файлов, символов, рёбер; инвертированный индекс для быстрого поиска.
+  - Модель в памяти: индексы для файлов, символов, рёбер; инвертированный индекс для быстрого поиска (в памяти).
   - Поиск: лексическая токенизация name/sig/doc1/path + буст точных/префиксных совпадений.
   - План контекста (context plan): упаковка спанов вокруг дефиниций под бюджет токенов; 1-hop расширение по require/provide.
   - События: шина событий для прогресса индексации и ошибок.
   - Асинхронность: дебаунс индексации; cancel-хэндл.
   - Интеграции: lore.el (getter atlas), простой обозреватель (atlas-explore).
   - Watch-mode: file-notify для триггера частичных обновлений.
+  - Экспорт: подграфы в DOT/Mermaid; LLM JSON pack (brief).
 - v2+ (расширение языков/источников и функций)
   - Источники: LSP (documentSymbol/references/callHierarchy), ctags, внешние индексаторы (stdin/jsonl).
-  - Больше типов рёбер: call/ref/import/implement/extend.
+  - Больше типов рёбер: call/ref/import/implement/extend/… (открытый словарь).
   - Сегментация хранилища по объёму; дополнительные индексы/эмбеддинги (опционально).
   - Визуализация графа и web-viewer/export.
 
@@ -51,10 +52,11 @@
   - inv — инвертированный индекс хранится в памяти; может быть выгружен через atlas-dump (не часть постоянного хранилища v1)
 - Формы данных (plist; стабильные ключи; символы-ключи)
   - Файл:
-    - (:path REL :size INT :mtime FLOAT :hash STR|nil :lang elisp :flags (:generated? t|nil :vendor? t|nil))
+    - (:path REL :size INT :mtime FLOAT :hash STR|nil :lang elisp
+       :flags (:generated? t|nil :vendor? t|nil))
   - Символ:
     - (:id STR :file REL :name STR :kind function|macro|var|custom|const
-       :beg INT :end INT :sig STR|nil :doc1 STR|nil :exported? t|nil :source elisp|lsp|ctags)
+       :beg INT :end INT :sig STR|nil :doc1 STR|nil :exported? t|nil :source elisp|lsp|ctags :lang elisp)
   - Ребро:
     - (:type require|provide|call|ref|import :from ID|REL|feature :to ID|REL|feature :weight FLOAT :source elisp|lsp|ctags)
     - В v1 используются require/provide с :from REL (файл) и :to "feature:NAME".
@@ -62,19 +64,20 @@
     - (:file REL :summary STR) | (:symbol ID :summary STR)
 - Идентификатор символа (стабильный)
   - "LANG:REL#NAME@BEG-END/KIND" (в v1 LANG=elisp; KIND как строка)
+
 - Компрессия/сегментация
   - Компрессия: включается через atlas-store-compressed и отражается в meta :opts/:compressed? t (файлы /.sexp.gz).
   - Сегментация: планируется для крупных карт (перенос в v2+); поле :segment-threshold хранится в meta как настройка.
 
 - Пример meta.sexp
-  #+begin_src emacs-lisp
-  (:schema 1
-   :project-root "/home/user/code/foo/"
-   :generated-at 1730820000.12
-   :counts (:files 128 :symbols 1640 :edges 4100)
-   :languages (elisp)
-   :opts (:segment-threshold 10000 :compressed? nil))
-  #+end_src
+#+begin_src emacs-lisp
+(:schema 1
+ :project-root "/home/user/code/foo/"
+ :generated-at 1730820000.12
+ :counts (:files 128 :symbols 1640 :edges 4100)
+ :languages (elisp)
+ :opts (:segment-threshold 10000 :compressed? nil))
+#+end_src
 
 - Архитектура и слои
 - Модель/индексы (в памяти)
@@ -86,16 +89,19 @@
   - inv-index: token → vector of symbol-id (ленивое построение)
   - id->tokens: id → list of tokens (кеш для инвертированного индекса)
   - Индексы ленивые, обновляемые инкрементально при мерже батчей; на обновлениях инвертированный индекс помечается грязным.
+
 - Источники карты (pluggable providers)
   - Интерфейс: (FN :root ROOT :changed PATHS :emit EMIT :done DONE :opts OPTS)
   - EMIT получает alist батча: (:files LIST) (:symbols LIST) (:edges LIST) (:summaries LIST) и опционально (:file REL) для замены по файлу.
   - Регистрация: atlas-register-source NAME :capabilities CAPS :fn FN :cost COST
   - capabilities: (:languages (elisp …) :kinds (files symbols edges summaries) :levels (L0 L1 L2 L3))
   - Встроенный провайдер v1: atlas-source-elisp (L0-L2).
+
 - Хранилище
   - Чтение/запись sexp; gzip по суффиксу; единые списки на файл; миграция схем через :schema.
   - Перезапись files.sexp при наличии :files в батче.
   - Замена символов/рёбер для конкретного файла при наличии ключа (:file REL) в батче (remove-then-append).
+
 - Ретривал и планирование контекста
   - Лексический поиск по name/sig/doc1/path; инвертированный индекс в памяти.
   - Ранжирование: частота токенов + бусты за точное/префиксное совпадение имени.
@@ -114,12 +120,17 @@
   - Рёбра: :type provide|require; :from REL; :to "feature:NAME".
 - L3 Резюме
   - Формат поддержан в хранилище; стратегия наполнения — отдельный поставщик/постпроцесс.
+
 - Инкрементальность
   - Провайдер может работать в режимах: полный обход или ограничение списком файлов.
   - При :file REL в батче: для REL удаляются старые символы/рёбра и добавляются новые.
+  - Детектор изменений: сравнение size/mtime и опц. sha256 (если atlas-hash-content=t, файлы ≤ atlas-max-file-size).
+  - TTL политика: если t-indexed > atlas-index-ttl → полный прогон; иначе — changed-only на основе детектора изменений.
+
 - Асинхронность/UX
   - atlas-index-async: дебаунс через run-at-time; возвращает токен и cancel-замыкание.
   - Публикация событий прогресса; безопасное логирование; отсутствие блокировок.
+  - watch-mode: глобальный minor-mode, file-notify, триггерит atlas-index-async с изменёнными путями.
 
 - API Emacs (публичные функции и команды)
 - Жизненный цикл
@@ -129,7 +140,7 @@
   - atlas-state ROOT → текущее состояние (alist).
 - Индексация
   - atlas-index ROOT &optional FULL-OR-CHANGED
-    - t → полный пересчёт; список путей → инкремент; nil → «изменённые» по политике провайдера.
+    - t → полный пересчёт; список путей → инкремент; nil → «изменённые» по TTL/детектору; при отсутствии изменений — только освежает meta.
   - atlas-reindex-changed ROOT → короткий алиас для atlas-index с nil.
   - atlas-index-async ROOT &key changed emit done → (:token :cancel)
     - changed: :full | list-of-paths | nil.
@@ -138,13 +149,15 @@
 - Поиск/граф/план
   - atlas-query ROOT keywords &key k kinds filters → список символов с score и range.
   - atlas-graph ROOT selector &key depth edge-types → подграф {:nodes LIST :edges LIST}
-    - selector: REL | "feature:NAME" | symbol-id; обход BFS на заданную глубину по out/in рёбрам.
+    - selector: REL | "feature:NAME" | symbol-id | список этих ключей. BFS на заданную глубину по out/in рёбрам с фильтром типов.
   - atlas-plan-context ROOT query &key k budget model
     - Возвращает: (:files [REL…] :spans [(:file REL :beg INT :end INT)…] :docs [] :rationale STR :est-tokens INT :items [alist…])
 - Экспорт/импорт
   - atlas-dump ROOT WHAT &key format path → записывает sexp|jsonl
     - WHAT: 'all | (files symbols edges summaries inv). inv — снимок in-memory индекса.
   - atlas-import ROOT BATCH → вливает :files/:symbols/:edges/:summaries (+ опц. :file REL) в стора и модель.
+  - atlas-graph-export ROOT SELECTOR &key depth edge-types format path → записать подграф в DOT или Mermaid.
+  - atlas-export-llm ROOT QUERY &key k budget graph-depth path → записать JSON «рюкзака» для LLM.
 - События (atlas-events)
   - atlas-events-subscribe TOPIC FN → отписка-замыкание
   - atlas-events-unsubscribe TOPIC FN
@@ -157,6 +170,8 @@
   - M-x atlas-explore
   - M-x atlas-watch-mode
   - M-x atlas-query-command (интерактивная обёртка над atlas-query)
+  - M-x atlas-graph-export-command (экспорт графа в DOT/Mermaid)
+  - M-x atlas-export-llm-command (экспорт LLM JSON pack)
 
 - Интеграция с lore.el
 - Getter atlas (atlas-lore.el)
@@ -211,18 +226,18 @@
   - Выбор под бюджет: элементы добавляются в порядке релевантности (лексический скоринг), затем окрестности; при превышении бюджета добавление останавливается.
 
 - Представления для LLM
-  - brief: минимальные поля (id/name/sig/doc1/file/range) и мотивировка выбора.
-  - rich: дополнительно связи, причины, оценка токенов и метаданные плана.
+  - brief: минимальные поля (id/name/sig/doc1/file/range/score) и мотивировка выбора.
+  - rich: дополнительно связи, причины, оценка токенов и метаданные плана; допускается как sexp.
 
 - Тестирование (ERT) и качество
 - Тесты ядра
   - Токенизация и инвертированный индекс: детерминированность токенов, отсутствие дубликатов, корректная сборка postings.
-  - Модель/идексы: мердж батчей с заменой по файлу; rebuild edges-in; очистка инвертированного индекса при изменениях.
+  - Модель/индексы: мердж батчей с заменой по файлу; rebuild edges-in; очистка инвертированного индекса при изменениях.
   - Сериализация стора: чтение/запись meta/files/symbols/edges; устойчивость к пустым файлам; gzip через jka-compr при включённой опции.
 - Тесты индексации (фикстуры файлов)
   - Извлечение defun/defmacro/defvar/defcustom/defconst: имя/вид/диапазон/сигнатура/doc1.
   - require/provide: корректные рёбра для feature:NAME; отсутствие ложных срабатываний на комментарии/строки.
-  - Инкрементальность: замена символов/рёбер по :file; актуализация индексов; стабильность id.
+  - Инкрементальность: замена символов/рёбер по :file; актуализация индексов; стабильность id; отсутствие перезаписи неизменённых файлов.
 - Тесты ретрива и плана
   - Скоринг по термам + бусты за точное/префиксное совпадение; ограничение top-k.
   - План под бюджет: оценка токенов; сбор спанов; 1-hop расширение по require/provide.
@@ -261,46 +276,47 @@
 
 - Приложение A: Примеры записей
 - meta.sexp
-  #+begin_src emacs-lisp
-  (:schema 1
-   :project-root "/home/user/code/foo/"
-   :generated-at 1730820000.12
-   :counts (:files 128 :symbols 1640 :edges 4100)
-   :languages (elisp)
-   :opts (:segment-threshold 10000 :compressed? nil))
-  #+end_src
+#+begin_src emacs-lisp
+(:schema 1
+ :project-root "/home/user/code/foo/"
+ :generated-at 1730820000.12
+ :counts (:files 128 :symbols 1640 :edges 4100)
+ :languages (elisp)
+ :opts (:segment-threshold 10000 :compressed? nil))
+#+end_src
 - files.sexp (элемент)
-  #+begin_src emacs-lisp
-  (:path "lisp/foo.el" :size 8421 :mtime 1730819900.42 :hash nil :lang elisp
-         :flags (:generated? nil :vendor? nil))
-  #+end_src
+#+begin_src emacs-lisp
+(:path "lisp/foo.el" :size 8421 :mtime 1730819900.42 :hash nil :lang elisp
+       :flags (:generated? nil :vendor? nil))
+#+end_src
 - symbols.sexp (элемент)
-  #+begin_src emacs-lisp
-  (:id "elisp:lisp/foo.el#bar@120-260/function"
-   :file "lisp/foo.el"
-   :name "bar"
-   :kind function
-   :beg 120 :end 260
-   :sig "(defun bar (x y))"
-   :doc1 "Return combined value of X and Y."
-   :exported? nil
-   :source elisp)
-  #+end_src
+#+begin_src emacs-lisp
+(:id "elisp:lisp/foo.el#bar@120-260/function"
+ :file "lisp/foo.el"
+ :name "bar"
+ :kind function
+ :beg 120 :end 260
+ :sig "(defun bar (x y))"
+ :doc1 "Return combined value of X and Y."
+ :exported? nil
+ :source elisp
+ :lang elisp)
+#+end_src
 - edges.sexp (элемент)
-  #+begin_src emacs-lisp
-  (:type require :from "lisp/foo.el" :to "feature:foo-core" :weight 1.0 :source elisp)
-  #+end_src
+#+begin_src emacs-lisp
+(:type require :from "lisp/foo.el" :to "feature:foo-core" :weight 1.0 :source elisp)
+#+end_src
 - summaries.sexp (элемент, зарезервировано)
-  #+begin_src emacs-lisp
-  (:file "lisp/foo.el" :summary "Core utilities for Foo.")
-  #+end_src
+#+begin_src emacs-lisp
+(:file "lisp/foo.el" :summary "Core utilities for Foo.")
+#+end_src
 - atlas-dump JSONL (фрагменты)
-  #+begin_src json
-  {"type":"files","data":{"path":"lisp/foo.el","size":8421,"mtime":1730819900.42,"hash":null,"lang":"elisp","flags":{"generated?":false,"vendor?":false}}}
-  {"type":"symbols","data":{"id":"elisp:lisp/foo.el#bar@120-260/function","file":"lisp/foo.el","name":"bar","kind":"function","beg":120,"end":260,"sig":"(defun bar (x y))","doc1":"Return combined value of X and Y.","exported?":null,"source":"elisp"}}
-  {"type":"edges","data":{"type":"require","from":"lisp/foo.el","to":"feature:foo-core","weight":1.0,"source":"elisp"}}
-  {"type":"inv","token":"bar","ids":["elisp:lisp/foo.el#bar@120-260/function","elisp:lisp/qux.el#bar@44-100/function"]}
-  #+end_src
+#+begin_src json
+{"type":"files","data":{"path":"lisp/foo.el","size":8421,"mtime":1730819900.42,"hash":null,"lang":"elisp","flags":{"generated?":false,"vendor?":false}}}
+{"type":"symbols","data":{"id":"elisp:lisp/foo.el#bar@120-260/function","file":"lisp/foo.el","name":"bar","kind":"function","beg":120,"end":260,"sig":"(defun bar (x y))","doc1":"Return combined value of X and Y.","exported?":null,"source":"elisp","lang":"elisp"}}
+{"type":"edges","data":{"type":"require","from":"lisp/foo.el","to":"feature:foo-core","weight":1.0,"source":"elisp"}}
+{"type":"inv","token":"bar","ids":["elisp:lisp/foo.el#bar@120-260/function","elisp:lisp/qux.el#bar@44-100/function"]}
+#+end_src
 
 - Приложение B: Контракты источников (providers)
 - Интерфейс вызова
@@ -328,30 +344,118 @@
 
 - Приложение C: Представления для LLM
 - brief
-  #+begin_src json
-  {
-    "query": "fix foo: wrong arg order",
-    "top": [
-      {"type":"symbol","id":"elisp:lisp/foo.el#foo@80-200/function","sig":"(defun foo (y x))",
-       "doc1":"Return processed pair.","file":"lisp/foo.el","range":[80,200]}
-    ],
-    "imports": ["feature:foo-core","feature:foo-utils"],
-    "notes": "Prefer foo and callers; check require chain."
-  }
-  #+end_src
+#+begin_src json
+{
+  "query": "fix foo: wrong arg order",
+  "top": [
+    {"type":"symbol","id":"elisp:lisp/foo.el#foo@80-200/function","sig":"(defun foo (y x))",
+     "doc1":"Return processed pair.","file":"lisp/foo.el","range":[80,200]}
+  ],
+  "imports": ["feature:foo-core","feature:foo-utils"],
+  "notes": "Prefer foo and callers; check require chain."
+}
+#+end_src
 - rich
-  #+begin_src emacs-lisp
-  (:query "fix foo arg order"
-   :items ((:why "name match foo; arg order suspected"
-            :symbol "elisp:lisp/foo.el#foo@80-200/function"
-            :span (:file "lisp/foo.el" :beg 60 :end 220)
-            :tokens 120))
-   :est-tokens 380
-   :files ("lisp/foo.el"))
-  #+end_src
+#+begin_src emacs-lisp
+(:query "fix foo arg order"
+ :items ((:why "name match foo; arg order suspected"
+          :symbol "elisp:lisp/foo.el#foo@80-200/function"
+          :span (:file "lisp/foo.el" :beg 60 :end 220)
+          :tokens 120))
+ :est-tokens 380
+ :files ("lisp/foo.el"))
+#+end_src
 
 - Заключение
 - Atlas фиксирует простой, расширяемый и версионированный формат карты проекта, чистое ядро и тонкие порты к источникам данных.
 - Версия v1 фокусируется на Emacs Lisp: инвентарь, символы, require/provide, быстрый лексический ретривал и план контекста.
 - Хранилище — sexp с опциональным gzip; инвертированный индекс — только в памяти, но может быть выгружен через dump.
 - Архитектура обеспечивает устойчивую инкрементальность, предсказуемые API и готовность к расширению (LSP/ctags/внешние источники) без ломки базовых контрактов.
+
+- Дополнение (v1.1): реализовано для «карты elisp» и экспорта
+  - Политика инкрементальности (TTL/changed-only)
+    - atlas-index учитывает TTL (atlas-index-ttl) и время последнего индекса (:last-index-at). Если TTL истёк — выполняется полный прогон; иначе — вычисляется список изменённых файлов.
+    - Вычисление изменений: сравнение по size/mtime и, при включённом atlas-hash-content, по sha256 (для файлов ≤ atlas-max-file-size). Неизменные файлы не переиндексируются.
+    - Результат «без изменений»: обновляется meta.generated-at и счётчики из стора; инвертированный индекс остаётся валидным; побочных записей нет.
+  - Файловый инвентарь (L0)
+    - :files элементы включают поля (:path :size :mtime :hash :lang :flags). :hash заполняется при включённом atlas-hash-content.
+  - Экспорт графа (малые подграфы)
+    - API: (atlas-graph ROOT SELECTOR &key depth edge-types) → (:nodes LIST :edges LIST)
+    - Экспорт: (atlas-graph-export ROOT SELECTOR &key depth edge-types format path)
+      - format: 'dot или 'mermaid; path обязателен.
+      - Узлы — ключи графа (REL-файлы, "feature:NAME", id символов); рёбра — (:type :from :to).
+    - Команда: M-x atlas-graph-export-command (интерактивные selector/format/depth/path).
+  - Экспорт «рюкзака» для LLM (язык-агностичный JSON)
+    - API: (atlas-export-llm ROOT QUERY &key k budget graph-depth path)
+      - Включает: query, top (id/name/kind/file/range/sig/doc1/score), files, spans ([file,beg,end]), graph (nodes/edges), est_tokens, rationale.
+      - graph-depth ограничивает 1-hop/2-hop расширение.
+    - Команда: M-x atlas-export-llm-command (интерактивно спрашивает путь/параметры).
+  - События и UX
+    - Публикуются события :atlas-index-start/:atlas-index-progress/:atlas-index-done/:atlas-index-error.
+    - Минимальный explorer (atlas-explore) показывает кликабельный обзор результатов; план строится через atlas-plan-context.
+  - Инварианты расширяемости (для будущих языков)
+    - Символ: обязательные поля (:id :lang :file :name :kind :beg :end); рекомендуемые (:ns :container :sig :doc1 :exported? :source); расширения под :x-*.
+    - Рёбра: (:type :from :to :weight? :source?); словарь edge-type открыт, но канонизируется (require/provide/call/ref/…).
+    - Идентификаторы стабильны в пределах файла: lang:REL#QUALIFIED@BEG-END/KIND.
+    - Токенизация — язык-агностичная; unicode-friendly; веса полей настраиваемые.
+    - Контракт провайдеров не меняется: per-file batch emit, capabilities декларируют :languages/:kinds/:levels и (в перспективе) :file-patterns.
+
+- Примеры (экспорт)
+
+  - Graph DOT (упрощённый)
+#+begin_src dot
+digraph Atlas {
+  rankdir=LR;
+  node [shape=box];
+  "lisp/foo.el";
+  "feature:foo-core";
+  "lisp/foo-core.el";
+  "lisp/foo.el" -> "feature:foo-core" [label="require"];
+  "lisp/foo-core.el" -> "feature:foo-core" [label="provide"];
+}
+#+end_src
+
+  - Mermaid
+#+begin_src mermaid
+graph LR
+  A["lisp/foo.el"]
+  F["feature:foo-core"]
+  B["lisp/foo-core.el"]
+  A --> F:::edge_require
+  B --> F:::edge_provide
+#+end_src
+
+  - LLM JSON pack (схема brief)
+#+begin_src json
+{
+  "query": "find defun foo",
+  "top": [
+    {
+      "id": "elisp:lisp/foo.el#foo@80-200/function",
+      "name": "foo",
+      "kind": "function",
+      "file": "lisp/foo.el",
+      "range": [80, 200],
+      "sig": "(defun foo (x y))",
+      "doc1": "Return ...",
+      "score": 7
+    }
+  ],
+  "files": ["lisp/foo.el", "lisp/foo-core.el"],
+  "spans": [{"file":"lisp/foo.el","beg":60,"end":220}],
+  "graph": {
+    "nodes": ["lisp/foo.el", "feature:foo-core", "lisp/foo-core.el"],
+    "edges": [
+      {"type":"require","from":"lisp/foo.el","to":"feature:foo-core"},
+      {"type":"provide","from":"lisp/foo-core.el","to":"feature:foo-core"}
+    ]
+  },
+  "est_tokens": 180,
+  "rationale": "Model=brief lexical+1hop plan under budget=1200"
+}
+#+end_src
+
+- Roadmap уточнение
+  - M1 дополнен экспортами: atlas-graph-export, atlas-export-llm и их интерактивные команды.
+  - M2 укрепляет инкрементальность (TTL/hash), UX (прогресс, explore) и watch-mode.
+  - M4 визуализацию можно развивать поверх уже доступного DOT/Mermaid.
