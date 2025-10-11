@@ -77,13 +77,15 @@ Return alist with :files :spans :docs :rationale :est-tokens :items."
                   (when (eq (plist-get pe :type) 'provide)
                     (let ((frel (plist-get pe :from)))
                       (puthash frel t files))))))))))
-    (list :files (let (acc) (maphash (lambda (k _v) (push k acc)) files) (nreverse acc))
+    (list :files (let (acc)
+                   (maphash (lambda (k _v) (push k acc)) files)
+                   (setq acc (nreverse acc))
+                   (seq-sort #'string< acc))
           :spans (nreverse spans)
           :docs '()
           :rationale (format "Model=%s lexical+1hop plan under budget=%d" model budget)
           :est-tokens spent
           :items (nreverse items))))
-
 (provide 'atlas-plan)
 
 ;;; atlas-plan.el ends here

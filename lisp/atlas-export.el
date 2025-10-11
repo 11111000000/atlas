@@ -143,7 +143,12 @@ Includes top items, files, spans, and a small graph."
                  (doc1 . ,(plist-get s :doc1))
                  (score . 0))))
            picked))
-         (files (seq-uniq (seq-filter #'identity (mapcar (lambda (o) (alist-get 'file o)) top))))
+         ;; Deterministic ordering
+         (top (seq-sort (lambda (a b) (string< (or (alist-get 'id a) "")
+                                               (or (alist-get 'id b) "")))
+                        top))
+         (files (seq-sort #'string<
+                          (seq-uniq (seq-filter #'identity (mapcar (lambda (o) (alist-get 'file o)) top)))))
          (starts files)
          (graph (condition-case err
                     (atlas-graph root starts :depth (or graph-depth 1))
@@ -153,33 +158,34 @@ Includes top items, files, spans, and a small graph."
          ;; Spans are optional; keep minimal for now (tests don't assert them).
          (spans '())
          (edges (alist-get :edges graph))
-         (imports (seq-uniq
-                   (seq-filter (lambda (x) (and (stringp x) (string-prefix-p "feature:" x)))
-                               (mapcar (lambda (e) (plist-get e :to)) edges))))
-         (json
-          `((graph . ((nodes . ,(vconcat (alist-get :nodes graph)))
-                      (edges . ,(vconcat (mapcar (lambda (e)
-                                                   (let ((tval (plist-get e :type)))
-                                                     `((type . ,(if (symbolp tval) (symbol-name tval) tval))
-                                                       (from . ,(plist-get e :from))
-                                                       (to . ,(plist-get e :to)))))
-                                                 edges)))))
-            (query . ,query)
-            (top . ,(vconcat top))
-            (files . ,(vconcat files))
-            (imports . ,(vconcat imports))
-            (spans . ,(vconcat (mapcar (lambda (sp) `((file . ,(plist-get sp :file))
-                                                      (beg . ,(plist-get sp :beg))
-                                                      (end . ,(plist-get sp :end))))
-                                       (or spans '()))))
-            (est_tokens . 0)
-            (rationale . "brief: lexical store-based selection"))))
-    (with-temp-file path
-      (insert (json-serialize json)))
-    (atlas-log :info "llm-export: root=%s items=%d files=%d nodes=%d edges=%d path=%s"
-               root (length top) (length files)
-               (length (alist-get :nodes graph)) (length (alist-get :edges graph)) path)
-    t))
+         (imports (seq-sort #'string<
+                            (seq-uniq
+                             (seq-filter (lambda (x) (and (stringp x) (string-prefix-p "feature:" x)))
+                                         (mapcar (lambda (e) (plist-get e :to)) edges))))))
+    (let ((json
+           `((graph . ((nodes . ,(vconcat (alist-get :nodes graph)))
+                       (edges . ,(vconcat (mapcar (lambda (e)
+                                                    (let ((tval (plist-get e :type)))
+                                                      `((type . ,(if (symbolp tval) (symbol-name tval) tval))
+                                                        (from . ,(plist-get e :from))
+                                                        (to . ,(plist-get e :to)))))
+                                                  edges)))))
+             (query . ,query)
+             (top . ,(vconcat top))
+             (files . ,(vconcat files))
+             (imports . ,(vconcat imports))
+             (spans . ,(vconcat (mapcar (lambda (sp) `((file . ,(plist-get sp :file))
+                                                       (beg . ,(plist-get sp :beg))
+                                                       (end . ,(plist-get sp :end))))
+                                        (or spans '()))))
+             (est_tokens . 0)
+             (rationale . "brief: lexical store-based selection"))))
+      (with-temp-file path
+        (insert (json-serialize json)))
+      (atlas-log :info "llm-export: root=%s items=%d files=%d nodes=%d edges=%d path=%s"
+                 root (length top) (length files)
+                 (length (alist-get :nodes graph)) (length (alist-get :edges graph)) path)
+      t)))
 
 ;;;###autoload
 (defun atlas-export-llm-command (root query path &optional k budget graph-depth)

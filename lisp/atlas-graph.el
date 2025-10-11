@@ -58,6 +58,23 @@ Returns alist (:nodes LIST :edges LIST). SELECTOR may be file REL, symbol id, or
       ;; Ensure starts appear even if no edges were traversed
       (when (and (null nodes) starts)
         (setq nodes (copy-sequence starts)))
+      ;; Deterministic ordering for stable outputs
+      (setq nodes (seq-sort #'string< nodes))
+      (setq edges
+            (seq-sort
+             (lambda (a b)
+               (let* ((ta (format "%s" (plist-get a :type)))
+                      (tb (format "%s" (plist-get b :type)))
+                      (fa (format "%s" (plist-get a :from)))
+                      (fb (format "%s" (plist-get b :from)))
+                      (oa (format "%s" (plist-get a :to)))
+                      (ob (format "%s" (plist-get b :to))))
+                 (or (string-lessp ta tb)
+                     (and (string= ta tb)
+                          (or (string-lessp fa fb)
+                              (and (string= fa fb)
+                                   (string-lessp oa ob)))))))
+             edges))
       (atlas-log :debug "graph: result nodes=%d edges=%d" (length nodes) (length edges))
       (list (cons :nodes nodes) (cons :edges edges)))))
 

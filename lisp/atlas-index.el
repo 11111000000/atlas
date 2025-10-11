@@ -116,6 +116,7 @@ CHANGED may be :full or a list of paths (relative or absolute). When finished, D
                         (remhash token atlas--async-tasks)
                         t))))))
 
+;;;###autoload
 (defun atlas-update (root paths)
   "Update Atlas for ROOT restricted to PATHS (list of relative or absolute)."
   (interactive (list (read-directory-name "Atlas root: " nil nil t)

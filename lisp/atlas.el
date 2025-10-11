@@ -129,6 +129,7 @@ The original token remains; sub-tokens are added additionally."
 (defun atlas--set-state (root state)
   (puthash (file-name-as-directory (expand-file-name root)) state atlas--states))
 
+;;;###autoload
 (defun atlas-open (root)
   "Open Atlas for ROOT directory: ensure store dir, load meta and in-memory indices, return state."
   (interactive (list (read-directory-name "Atlas root: " nil nil t)))
@@ -154,6 +155,7 @@ The original token remains; sub-tokens are added additionally."
         (message "Atlas opened at %s" dir))
       state)))
 
+;;;###autoload
 (defun atlas-close (root)
   "Close Atlas for ROOT: drop in-memory state."
   (interactive (list (read-directory-name "Atlas root: " nil nil t)))
