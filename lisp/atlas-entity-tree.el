@@ -695,6 +695,13 @@ Optional K and BUDGET override defaults for the view."
         (atlas-entity-tree-refresh)))
     buf))
 
+;;;###autoload
+(defun atlas-entities (&optional root)
+  "Compatibility alias: open Atlas Entities tree for ROOT (or current directory).
+Replaces legacy =atlas-entities' UI with the new entity-centric tree."
+  (interactive)
+  (atlas-entity-tree (or root default-directory)))
+
 (provide 'atlas-entity-tree)
 
 ;;; atlas-entity-tree.el ends here
