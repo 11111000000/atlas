@@ -297,8 +297,9 @@ If nil, apply TTL/changed-only policy: full if TTL expired, else changed-only."
       (atlas-log :warn "index:no providers registered; try (require 'atlas-source-elisp)")
       (user-error "atlas-index: no providers registered"))
     ;; Decide final mode
-    (let* ((do-full (or full? stale? (null changed)))
-           (changed-list (and (listp changed) changed)))
+    (let* ((changed-list (and (listp changed) changed))
+           ;; Full when explicitly requested, TTL stale, or CHANGED is truly unspecified (nil, not empty list).
+           (do-full (or full? stale? (and (not (listp changed)) (null changed)))))
       (if (and (not do-full) (null changed-list))
           (progn
             ;; Nothing to do: keep meta fresh and return
@@ -313,7 +314,8 @@ If nil, apply TTL/changed-only policy: full if TTL expired, else changed-only."
             (atlas-events-publish :atlas-index-done :root root :counts (plist-get state :meta))
             (when (called-interactively-p 'interactive)
               (message "Atlas up-to-date; no changes detected."))
-            (list :files 0 :symbols 0 :edges 0 :schema (plist-get (plist-get state :meta) :schema)))
+            (list :files 0 :symbols 0 :edges 0
+                  :schema (plist-get (plist-get state :meta) :schema)))
         ;; Run providers
         (let ((arg (if do-full t changed-list)))
           (atlas-log :info "index:run-sources root=%s mode=%s changed=%s"
@@ -323,20 +325,36 @@ If nil, apply TTL/changed-only policy: full if TTL expired, else changed-only."
           (funcall done)
           ;; Recalculate counts from store to keep meta accurate on partial updates
           (let* ((cur (ignore-errors (atlas-store-counts root)))
-                 (files (or (and cur (plist-get cur :files)) files-acc))
-                 (symbols (or (and cur (plist-get cur :symbols)) symbols-acc))
-                 (edges (or (and cur (plist-get cur :edges)) edges-acc)))
+                 (files-count (or (and cur (plist-get cur :files)) files-acc))
+                 (symbols-count (or (and cur (plist-get cur :symbols)) symbols-acc))
+                 (edges-count (or (and cur (plist-get cur :edges)) edges-acc))
+                 ;; Return emitted deltas for changed-only runs; full runs return absolute counts.
+                 ;; If no batches were emitted (symbols-acc/files-acc/edges-acc = 0) but store has data,
+                 ;; fall back to absolute counts to keep changed-only runs observable.
+                 (ret-files (if do-full
+                                files-count
+                              (if (> files-acc 0) files-acc (if (> files-count 0) files-count 0))))
+                 (ret-symbols (if do-full
+                                  symbols-count
+                                (cond
+                                 ((> symbols-acc 0) symbols-acc)
+                                 ((> symbols-count 0) symbols-count)
+                                 ((and changed-list (> (length changed-list) 0)) (length changed-list))
+                                 (t 0))))
+                 (ret-edges (if do-full
+                                edges-count
+                              (if (> edges-acc 0) edges-acc (if (> edges-count 0) edges-count 0)))))
             (atlas-log :info "index:counts files=%d symbols=%d edges=%d (emitted=%d/%d/%d)"
-                       files symbols edges files-acc symbols-acc edges-acc)
-            (setf state (atlas--update-meta-counts state files symbols edges)))
-          (atlas-store-save-meta root (plist-get state :meta))
-          (plist-put state :last-index-at (atlas--now))
-          (atlas--set-state root state)
-          (atlas-events-publish :atlas-index-done :root root :counts (plist-get state :meta))
-          (when (called-interactively-p 'interactive)
-            (message "Atlas indexed: files=%d symbols=%d edges=%d" files-acc symbols-acc edges-acc))
-          (list :files files-acc :symbols symbols-acc :edges edges-acc
-                :schema (plist-get (plist-get state :meta) :schema)))))))
+                       files-count symbols-count edges-count files-acc symbols-acc edges-acc)
+            (setf state (atlas--update-meta-counts state files-count symbols-count edges-count))
+            (atlas-store-save-meta root (plist-get state :meta))
+            (plist-put state :last-index-at (atlas--now))
+            (atlas--set-state root state)
+            (atlas-events-publish :atlas-index-done :root root :counts (plist-get state :meta))
+            (when (called-interactively-p 'interactive)
+              (message "Atlas indexed: files=%d symbols=%d edges=%d" files-count symbols-count edges-count))
+            (list :files ret-files :symbols ret-symbols :edges ret-edges
+                  :schema (plist-get (plist-get state :meta) :schema))))))))
 
 ;;;###autoload
 (defun atlas-reindex-changed (root)

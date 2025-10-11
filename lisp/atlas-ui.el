@@ -60,8 +60,8 @@
   '(:eval (when (and (boundp 'atlas-progress-mode) atlas-progress-mode)
             (when (and (stringp atlas-ui--segment)
                        (> (length atlas-ui--segment) 0))
-              (concat " " atlas-ui--segment)))))
-"Mode-line construct for Atlas progress.")
+              (concat " " atlas-ui--segment))))
+  "Mode-line construct for Atlas progress.")
 
 ;;;###autoload
 (define-minor-mode atlas-progress-mode

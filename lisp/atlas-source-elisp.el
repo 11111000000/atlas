@@ -189,6 +189,23 @@ CHANGED may be :auto, nil, or a list of paths (relative or absolute)."
                             (buffer-substring-no-properties (point-min) (point-max))))
                  (symbols (atlas-elisp--scan-symbols rel content))
                  (edges (atlas-elisp--scan-requires rel content)))
+            ;; If file only provides a feature and has no def* symbols, synthesize a stub symbol
+            ;; so changed-only runs still report symbol deltas.
+            (when (null symbols)
+              (let ((feat (seq-some
+                           (lambda (e)
+                             (let ((to (plist-get e :to)))
+                               (when (and (eq (plist-get e :type) 'provide)
+                                          (stringp to)
+                                          (string-prefix-p "feature:" to))
+                                 (substring to (length "feature:")))))
+                           edges)))
+                (when feat
+                  (let* ((name feat)
+                         (id (atlas--symbol-id :lang "elisp" :rel rel :name name :beg 0 :end 0 :kind "symbol")))
+                    (setq symbols (list (list :id id :file rel :name name :kind 'symbol
+                                              :beg 0 :end 0 :sig nil :doc1 nil
+                                              :exported? t :source 'elisp :lang 'elisp)))))))
             (atlas-log :trace "elisp:L1/L2 file=%s symbols=%d edges=%d" rel (length symbols) (length edges))
             (funcall emit (list (cons :file rel) (cons :symbols symbols) (cons :edges edges))))
         (error

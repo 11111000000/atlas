@@ -44,6 +44,8 @@
 (defun atlas-index--detect-changes (root)
   "Return list of absolute paths of .el files changed since last inventory save."
   (let* ((root (file-name-as-directory (expand-file-name root)))
+         (state (atlas-state root))
+         (last (or (and state (plist-get state :last-index-at)) 0.0))
          (stored (ignore-errors (atlas-store-load-files root)))
          (by-rel (let ((ht (make-hash-table :test #'equal)))
                    (dolist (f stored)
@@ -56,6 +58,7 @@
              (attr (file-attributes abs))
              (size (nth 7 attr))
              (mtime (float-time (file-attribute-modification-time attr)))
+             (ctime (float-time (file-attribute-change-time attr)))
              (entry (and rel (gethash rel by-rel)))
              (prev-mtime (and entry (plist-get entry :mtime)))
              (prev-size (and entry (plist-get entry :size)))
@@ -72,7 +75,9 @@
               (or (null entry)
                   (not (equal prev-size size))
                   (not (equal prev-mtime mtime))
-                  (and need-hash? (not (equal prev-hash cur-hash))))))
+                  (and need-hash? (not (equal prev-hash cur-hash)))
+                  ;; Fallback on last-index-at: consider both mtime and ctime.
+                  (and (numberp last) (or (> mtime last) (> ctime last))))))
         (when modified?
           (push abs changed))))
     (nreverse changed)))
