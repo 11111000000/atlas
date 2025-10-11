@@ -307,3 +307,40 @@ emacs -Q --batch -L lisp -l test/ert-runner.el
 - Style: =CODESTYLE.org=
 - Core modules: =lisp/atlas/.el=
 - CI: GitHub Actions (flake-based ERT)
+
+* Atlas Entities — Entity-centric tree
+A project map view “around entities” (features, files, symbols, edges), similar in spirit to treemacs but entity-first.
+
+- Open the tree
+#+begin_src emacs-lisp
+(let ((root default-directory))
+  (atlas-open root)
+  (atlas-entity-tree root))       ;; opens buffer "*Atlas Entities*"
+#+end_src
+
+- Views
+  - by-feature (default): Features → Provided by/Required by files
+  - by-kind: Symbols grouped by kind (Function/Macro/Var/Custom/Const/Symbol)
+  - search: “Search: <query>” results with local In/Out edge context
+  - imports: Imports/Provides overview (alias of by-feature with heading)
+  - edges: local neighborhood around selector (REL | feature:NAME | symbol id)
+  - plan: “Plan: <query>, budget=N” — files and spans from atlas-plan-context
+
+- Commands
+  - atlas-entity-tree ROOT — open/reveal the tree for ROOT
+  - atlas-entity-tree-set-view VIEW — switch current view (by-feature|by-kind|search|imports|edges|plan)
+  - atlas-entity-tree-search ROOT QUERY [K] — open tree in ‘search view
+  - atlas-entity-tree-edges ROOT SELECTOR [DEPTH] — open ‘edges view around selector
+  - atlas-entity-tree-plan ROOT QUERY [K BUDGET] — open ‘plan view for QUERY
+
+- Key bindings (inside Atlas Entities buffer)
+  - g       refresh
+  - RET/o   open item (file at position)
+  - p       peek (open file preview in a side window)
+  - i       toggle follow-mode (auto-peek as point moves)
+  - a       actions menu (Open / Peek / Copy path)
+
+- Behavior
+  - Reacts to indexing events (:atlas-index-start/progress/done) and auto-refreshes when enabled
+  - Deterministic ordering; simple, text-first fallback with optional magit-section renderer
+  - No disk I/O in UI; reads from in-memory model (atlas-model)

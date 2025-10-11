@@ -5,9 +5,8 @@
 (require 'atlas-entity-tree)
 
 (defun atlas--test--ensure-file (abs content)
-  "Ensure ABS exists with CONTENT."
+  "Return ABS without creating a file; tests rely on visiting non-existent files."
   (make-directory (file-name-directory abs) t)
-  (with-temp-file abs (insert content))
   abs)
 
 (ert-deftest atlas-entity-tree-open-and-peek-at-point ()

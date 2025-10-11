@@ -459,3 +459,14 @@ graph LR
   - M1 дополнен экспортами: atlas-graph-export, atlas-export-llm и их интерактивные команды.
   - M2 укрепляет инкрементальность (TTL/hash), UX (прогресс, explore) и watch-mode.
   - M4 визуализацию можно развивать поверх уже доступного DOT/Mermaid.
+
+- Визуализация: Atlas Entities (дерево сущностей)
+  - Режим/буфер: major-mode =atlas-entity-tree-mode=, окно “*Atlas Entities*”.
+  - Представления: by-feature (фичи → файлы), by-kind (символы по виду), search (результаты + In/Out edges),
+    imports (обзор require/provide), edges (локальная окрестность селектора), plan (файлы/спаны по запросу).
+  - Команды: =atlas-entity-tree=, =atlas-entity-tree-set-view=, =atlas-entity-tree-search=,
+    =atlas-entity-tree-edges=, =atlas-entity-tree-plan=.
+  - Клавиши: g — refresh; RET/o — открыть; p — peek; i — follow-mode; a — меню действий.
+  - События: реакция на :atlas-index-start/progress/done/error; авто-refresh при =atlas-entity-tree-auto-refresh=.
+  - Производительность: ленивый вывод, стабильная сортировка, отсутствие блокирующего I/O в UI.
+  - Тесты (ERT): =test-entity-tree-*.el= покрывают открытие буфера, представления и базовые действия.
