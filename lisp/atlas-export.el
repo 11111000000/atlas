@@ -112,51 +112,58 @@ FORMAT is 'dot or 'mermaid. PATH is required."
 
 (cl-defun atlas-export-llm (root query &key k budget graph-depth path)
   "Export a language-agnostic JSON pack for LLM for QUERY at ROOT to PATH.
-Includes top items, files, spans, and a small graph."
+Builds top via atlas-query and derives files/spans/tokens via atlas-plan-context for determinism."
   (unless path (user-error "atlas-export-llm: PATH is required"))
   (let* ((state (or (atlas-state root) (atlas-open root)))
          (k (or k 12))
-         ;; Select symbols from store by simple name match (robust even without inv-index).
-         (syms (or (ignore-errors (atlas-store-load-symbols root)) '()))
-         (q (downcase (or query "")))
-         (matches (seq-filter
-                   (lambda (s)
-                     (let ((nm (downcase (or (plist-get s :name) ""))))
-                       (and (stringp nm)
-                            (string-match-p (regexp-quote q) nm))))
-                   syms))
-         (picked (seq-take (if matches matches syms) k))
+         (budget (or budget atlas-plan-default-budget))
+         ;; Results via query (deterministic sorting by id as tiebreaker)
+         (results (ignore-errors (atlas-query root query :k k)))
          (top
           (mapcar
-           (lambda (s)
-             (let ((id   (plist-get s :id))
-                   (file (plist-get s :file))
-                   (beg  (or (plist-get s :beg) 0))
-                   (end  (or (plist-get s :end) 0))
-                   (kval (plist-get s :kind)))
+           (lambda (r)
+             (let* ((id (alist-get :id r))
+                    (file (alist-get :file r))
+                    (range (alist-get :range r))
+                    (beg (or (car-safe range) 0))
+                    (end (or (cdr-safe range) 0))
+                    (name (alist-get :name r))
+                    (sig (alist-get :sig r))
+                    (doc1 (alist-get :doc1 r))
+                    (score (or (alist-get :score r) 0))
+                    ;; Try to preserve kind from in-memory symbol if available
+                    (sym (and id (atlas-model-get-symbol state id)))
+                    (kval (or (and sym (plist-get sym :kind)) 'symbol)))
                `((id . ,id)
-                 (name . ,(plist-get s :name))
+                 (name . ,name)
                  (kind . ,(if (symbolp kval) (symbol-name kval) kval))
                  (file . ,file)
                  (range . ,(atlas-export--pair-range (cons beg end)))
-                 (sig . ,(plist-get s :sig))
-                 (doc1 . ,(plist-get s :doc1))
-                 (score . 0))))
-           picked))
-         ;; Deterministic ordering
+                 (sig . ,sig)
+                 (doc1 . ,doc1)
+                 (score . ,score))))
+           (or results '())))
+         ;; Deterministic order for TOP
          (top (seq-sort (lambda (a b) (string< (or (alist-get 'id a) "")
-                                               (or (alist-get 'id b) "")))
+                                          (or (alist-get 'id b) "")))
                         top))
+         ;; Plan provides files/spans/tokens/rationale (already uses query internally)
+         (plan (ignore-errors (atlas-plan-context root query :k k :budget budget :model 'brief)))
+         (plan-files (and plan (alist-get :files plan)))
+         (plan-spans (and plan (alist-get :spans plan)))
+         (est-tokens (or (and plan (alist-get :est-tokens plan)) 0))
+         (rationale (or (and plan (alist-get :rationale plan)) "brief: lexical+1hop plan"))
+         ;; Files: prefer plan files, else derive from TOP; keep sorted
          (files (seq-sort #'string<
-                          (seq-uniq (seq-filter #'identity (mapcar (lambda (o) (alist-get 'file o)) top)))))
+                          (seq-uniq
+                           (or plan-files
+                               (seq-filter #'identity (mapcar (lambda (o) (alist-get 'file o)) top))))))
          (starts files)
          (graph (condition-case err
                     (atlas-graph root starts :depth (or graph-depth 1))
                   (error
                    (atlas-log :error "llm-export: graph error: %S" err)
                    (list (cons :nodes '()) (cons :edges '())))))
-         ;; Spans are optional; keep minimal for now (tests don't assert them).
-         (spans '())
          (edges (alist-get :edges graph))
          (imports (seq-sort #'string<
                             (seq-uniq
@@ -175,11 +182,11 @@ Includes top items, files, spans, and a small graph."
              (files . ,(vconcat files))
              (imports . ,(vconcat imports))
              (spans . ,(vconcat (mapcar (lambda (sp) `((file . ,(plist-get sp :file))
-                                                       (beg . ,(plist-get sp :beg))
-                                                       (end . ,(plist-get sp :end))))
-                                        (or spans '()))))
-             (est_tokens . 0)
-             (rationale . "brief: lexical store-based selection"))))
+                                                  (beg . ,(plist-get sp :beg))
+                                                  (end . ,(plist-get sp :end))))
+                                        (or plan-spans '()))))
+             (est_tokens . ,est-tokens)
+             (rationale . ,rationale))))
       (with-temp-file path
         (insert (json-serialize json)))
       (atlas-log :info "llm-export: root=%s items=%d files=%d nodes=%d edges=%d path=%s"

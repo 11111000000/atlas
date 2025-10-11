@@ -212,7 +212,7 @@ graph LR
   ],
   "files": ["lisp/foo.el", "lisp/foo-core.el"],
   "imports": ["feature:foo-core"],
-  "spans": [],
+  "spans": [{"file":"lisp/foo.el","beg":60,"end":220}],
   "graph": {
     "nodes": ["feature:foo-core", "lisp/foo-core.el", "lisp/foo.el"],
     "edges": [
@@ -220,8 +220,8 @@ graph LR
       {"type":"require","from":"lisp/foo.el","to":"feature:foo-core"}
     ]
   },
-  "est_tokens": 0,
-  "rationale": "brief: lexical store-based selection"
+  "est_tokens": 180,
+  "rationale": "Model=brief lexical+1hop plan under budget=1200"
 }
 #+end_src
 

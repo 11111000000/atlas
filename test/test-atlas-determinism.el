@@ -39,7 +39,7 @@
                                                   (string-lessp oa ob)))))))
                             (copy-sequence edges))))
               (should (equal edges sorted))))))
-    (ignore-errors (delete-directory root t)))))
+    (ignore-errors (delete-directory root t))))
 
 (ert-deftest atlas-export-llm-deterministic ()
   "LLM JSON pack has deterministic ordering in graph nodes and top/files/imports."
