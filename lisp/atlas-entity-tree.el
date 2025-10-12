@@ -84,6 +84,7 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
 (defvar-local atlas-entity-tree--edges-selector nil
   "Current selector for 'edges view (file REL, feature:NAME, or symbol id).")
 
+;;;###autoload
 (defun atlas-entity-tree-set-view (view)
   "Set current VIEW for the tree buffer and refresh. VIEW is a symbol."
   (interactive
@@ -124,32 +125,81 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
   "Insert textual tree for 'by-feature view for ROOT."
   (let* ((state (atlas-entity-tree--state root))
          (features (atlas-entity-tree--collect-features state)))
-    (insert (format "Features (%d):\n" (length features)))
-    (dolist (feat features)
-      (let* ((provided (atlas-entity-tree--files-for-feature state feat 'provide))
-             (required (atlas-entity-tree--files-for-feature state feat 'require)))
-        ;; Feature header
-        (insert (format "- %s\n" feat))
-        ;; Providers
-        (insert (format "  Provided by (%d):\n" (length provided)))
-        (dolist (rel provided)
-          (let ((lstart (point)))
-            (insert (format "    %s\n" rel))
-            (add-text-properties
-             lstart (line-end-position 0)
-             (list 'atlas-root (file-name-as-directory (expand-file-name root))
-                   'atlas-rel rel
-                   'mouse-face 'highlight))))
-        ;; Requirees
-        (insert (format "  Required by (%d):\n" (length required)))
-        (dolist (rel required)
-          (let ((lstart (point)))
-            (insert (format "    %s\n" rel))
-            (add-text-properties
-             lstart (line-end-position 0)
-             (list 'atlas-root (file-name-as-directory (expand-file-name root))
-                   'atlas-rel rel
-                   'mouse-face 'highlight))))))))
+    (cl-labels
+        ((atlas-entity-tree--print-file-and-symbols
+           (rel)
+           ;; File line (clickable)
+           (let ((lstart (point)))
+             (insert (format "    %s\n" rel))
+             (add-text-properties
+              lstart (line-end-position 0)
+              (list 'atlas-root (file-name-as-directory (expand-file-name root))
+                    'atlas-rel rel
+                    'mouse-face 'highlight)))
+           ;; Symbols defined in this file
+           (let* ((idxs (plist-get state :indexes))
+                  (by-id (and idxs (plist-get idxs atlas-model--k-sym-by-id)))
+                  (syms '()))
+             (when (hash-table-p by-id)
+               (maphash
+                (lambda (_id s)
+                  (when (equal (plist-get s :file) rel)
+                    (push s syms)))
+                by-id))
+             ;; Stable sort: by :beg then by :name
+             (setq syms
+                   (seq-sort
+                    (lambda (a b)
+                      (let* ((ba (or (plist-get a :beg) 0))
+                             (bb (or (plist-get b :beg) 0))
+                             (na (or (plist-get a :name) ""))
+                             (nb (or (plist-get b :name) "")))
+                        (or (< ba bb)
+                            (and (= ba bb) (string-lessp na nb)))))
+                    syms))
+             (let* ((total (length syms))
+                    (limit 20)
+                    (shown (if (> total limit) (seq-take syms limit) syms)))
+               (insert (format "      Symbols (%d):\n" total))
+               (dolist (s shown)
+                 (let* ((name (or (plist-get s :name) "symbol"))
+                        (kind (or (plist-get s :kind) 'symbol))
+                        (sig  (or (plist-get s :sig) ""))
+                        (doc1 (or (plist-get s :doc1) ""))
+                        (beg  (or (plist-get s :beg) 1))
+                        (kstr (capitalize (symbol-name kind)))
+                        (lstart2 (point)))
+                   (insert (format "        %s [%s]" name kstr))
+                   (when (and (stringp sig) (> (length sig) 0))
+                     (insert (format "  %s" sig)))
+                   (when (and (stringp doc1) (> (length doc1) 0))
+                     (let ((first (car (split-string doc1 "\n" t))))
+                       (when (and first (> (length first) 0))
+                         (insert (format " — %s" first)))))
+                   (insert "\n")
+                   ;; Make symbol line clickable (opens file at :beg)
+                   (add-text-properties
+                    lstart2 (line-end-position 0)
+                    (list 'atlas-root (file-name-as-directory (expand-file-name root))
+                          'atlas-rel rel
+                          'atlas-beg beg
+                          'mouse-face 'highlight))))
+               (when (> total (length shown))
+                 (insert (format "        … and %d more\n" (- total (length shown)))))))))
+      (insert (format "Features (%d):\n" (length features)))
+      (dolist (feat features)
+        (let* ((provided (atlas-entity-tree--files-for-feature state feat 'provide))
+               (required (atlas-entity-tree--files-for-feature state feat 'require)))
+          ;; Feature header
+          (insert (format "- %s\n" feat))
+          ;; Providers
+          (insert (format "  Provided by (%d):\n" (length provided)))
+          (dolist (rel provided)
+            (atlas-entity-tree--print-file-and-symbols rel))
+          ;; Requirees
+          (insert (format "  Required by (%d):\n" (length required)))
+          (dolist (rel required)
+            (atlas-entity-tree--print-file-and-symbols rel)))))))
 
 (defun atlas-entity-tree--all-symbols (state)
   "Return list of symbol plists from STATE via inverted index."
@@ -448,6 +498,7 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
        (atlas-entity-tree--render-text root)))
     (_ (atlas-entity-tree--render-text root))))
 
+;;;###autoload
 (defun atlas-entity-tree-refresh (&optional hard)
   "Refresh entity tree buffer. If HARD is non-nil, rebuild state (placeholder)."
   (interactive "P")
@@ -508,6 +559,7 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
     (goto-char (or beg 1))
     (recenter)))
 
+;;;###autoload
 (defun atlas-entity-tree-open-at-point ()
   "Open entity at point (file for now) using text properties."
   (interactive)
@@ -522,6 +574,7 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
         (atlas-entity-tree--open-file root rel beg)
       (message "No openable item at point"))))
 
+;;;###autoload
 (defun atlas-entity-tree-peek-at-point ()
   "Peek content of file at point in a side window. Smoke implementation."
   (interactive)
@@ -544,6 +597,7 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
           t)
       (progn (message "No previewable item at point") nil))))
 
+;;;###autoload
 (defun atlas-entity-tree-copy-at-point ()
   "Copy item path at point (atlas-rel) to kill-ring. Return copied string or nil."
   (interactive)
@@ -558,15 +612,139 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
       (message "No copyable item at point")
       nil)))
 
-(defun atlas-entity-tree-actions ()
-  "Show simple actions menu for item at point."
+(defcustom atlas-entity-tree-use-transient t
+  "If non-nil and transient is available, use a transient menu for actions."
+  :type 'boolean :group 'atlas-entity-tree)
+
+;; Optional transient-based menu
+(when (require 'transient nil 'noerror)
+  (transient-define-suffix atlas-entity-tree--t-open ()
+    "Open at point."
+    :description "Open"
+    (interactive) (atlas-entity-tree-open-at-point))
+
+  (transient-define-suffix atlas-entity-tree--t-peek ()
+    "Peek at point."
+    :description "Peek"
+    (interactive) (atlas-entity-tree-peek-at-point))
+
+  (transient-define-suffix atlas-entity-tree--t-copy ()
+    "Copy path at point."
+    :description "Copy path"
+    (interactive) (atlas-entity-tree-copy-at-point))
+
+  (transient-define-suffix atlas-entity-tree--t-set-view (view)
+    "Set current view to VIEW."
+    :description (lambda () (format "Set view: %s" (or (and (boundp 'view) view) "<ask>")))
+    (interactive (list (intern (completing-read "View: " '("by-feature" "by-kind" "search" "imports" "edges" "plan") nil t))))
+    (atlas-entity-tree-set-view view))
+
+  (transient-define-suffix atlas-entity-tree--t-search ()
+    "Search view (prompt)."
+    :description "Search…"
+    (interactive)
+    (let* ((root (or atlas-entity-tree--root default-directory))
+           (q (read-string "Search query: " (or atlas-entity-tree--search-query ""))))
+      (atlas-entity-tree-search root q)))
+
+  (transient-define-suffix atlas-entity-tree--t-edges ()
+    "Edges view around selector (prompt)."
+    :description "Edges around…"
+    (interactive)
+    (let* ((root (or atlas-entity-tree--root default-directory))
+           (sel (read-string "Selector (file REL | feature:NAME | symbol id): " (or atlas-entity-tree--edges-selector "")))
+           (depth (read-number "Depth: " (or atlas-entity-tree-graph-depth 1))))
+      (atlas-entity-tree-edges root sel depth)))
+
+  (transient-define-suffix atlas-entity-tree--t-plan ()
+    "Plan view (prompt)."
+    :description "Plan…"
+    (interactive)
+    (let* ((root (or atlas-entity-tree--root default-directory))
+           (q (read-string "Plan query: " (or atlas-entity-tree--plan-query "")))
+           (k (read-number "Top K: " (or atlas-entity-tree-plan-k 12)))
+           (budget (read-number "Budget: " (or atlas-entity-tree-plan-budget atlas-plan-default-budget))))
+      (atlas-entity-tree-plan root q k budget)))
+
+  (transient-define-suffix atlas-entity-tree--t-follow-toggle ()
+    "Toggle follow-mode."
+    :description "Toggle follow-mode"
+    (interactive) (atlas-entity-tree-toggle-follow))
+
+  (transient-define-suffix atlas-entity-tree--t-refresh ()
+    "Refresh view."
+    :description "Refresh"
+    (interactive) (atlas-entity-tree-refresh))
+
+  (transient-define-prefix atlas-entity-tree-transient ()
+    "Atlas Entities — actions"
+    [["Actions"
+      ("o" atlas-entity-tree--t-open)
+      ("p" atlas-entity-tree--t-peek)
+      ("y" atlas-entity-tree--t-copy)]
+     ["Views"
+      ("v f" "by-feature" (lambda () (interactive) (atlas-entity-tree-set-view 'by-feature)))
+      ("v k" "by-kind"    (lambda () (interactive) (atlas-entity-tree-set-view 'by-kind)))
+      ("v s" "search…"    atlas-entity-tree--t-search)
+      ("v i" "imports"    (lambda () (interactive) (atlas-entity-tree-set-view 'imports)))
+      ("v e" "edges…"     atlas-entity-tree--t-edges)
+      ("v p" "plan…"      atlas-entity-tree--t-plan)]
+     ["Misc"
+      ("g" atlas-entity-tree--t-refresh)
+      ("i" atlas-entity-tree--t-follow-toggle)]]))
+
+;;;###autoload
+(defun atlas-entity-tree-search-command ()
+  "Prompt and open 'search view for the current entity tree buffer."
   (interactive)
-  (let* ((choices '("Open" "Peek" "Copy path"))
-         (act (completing-read "Action: " choices nil t)))
-    (pcase act
-      ("Open" (call-interactively #'atlas-entity-tree-open-at-point))
-      ("Peek" (call-interactively #'atlas-entity-tree-peek-at-point))
-      ("Copy path" (call-interactively #'atlas-entity-tree-copy-at-point)))))
+  (unless (derived-mode-p 'atlas-entity-tree-mode)
+    (user-error "Not in atlas-entity-tree buffer"))
+  (let* ((root (or atlas-entity-tree--root default-directory))
+         (q (read-string "Search query: " (or atlas-entity-tree--search-query ""))))
+    (atlas-entity-tree-search root q)))
+
+;;;###autoload
+(defun atlas-entity-tree-edges-command ()
+  "Prompt and open 'edges view for the current entity tree buffer."
+  (interactive)
+  (unless (derived-mode-p 'atlas-entity-tree-mode)
+    (user-error "Not in atlas-entity-tree buffer"))
+  (let* ((root (or atlas-entity-tree--root default-directory))
+         (sel (read-string "Selector (file REL | feature:NAME | symbol id): " (or atlas-entity-tree--edges-selector "")))
+         (depth (read-number "Depth: " (or atlas-entity-tree-graph-depth 1))))
+    (atlas-entity-tree-edges root sel depth)))
+
+;;;###autoload
+(defun atlas-entity-tree-plan-command ()
+  "Prompt and open 'plan view for the current entity tree buffer."
+  (interactive)
+  (unless (derived-mode-p 'atlas-entity-tree-mode)
+    (user-error "Not in atlas-entity-tree buffer"))
+  (let* ((root (or atlas-entity-tree--root default-directory))
+         (q (read-string "Plan query: " (or atlas-entity-tree--plan-query "")))
+         (k (read-number "Top K: " (or atlas-entity-tree-plan-k 12)))
+         (budget (read-number "Budget: " (or atlas-entity-tree-plan-budget atlas-plan-default-budget))))
+    (atlas-entity-tree-plan root q k budget)))
+
+;;;###autoload
+(defun atlas-entity-tree-actions ()
+  "Show actions menu for item at point.
+If =atlas-entity-tree-use-transient' and transient is available, show transient menu.
+Otherwise, fallback to a simple completing-read menu."
+  (interactive)
+  (if (and atlas-entity-tree-use-transient (featurep 'transient) (fboundp 'atlas-entity-tree-transient))
+      (atlas-entity-tree-transient)
+    (let* ((choices '("Open" "Peek" "Copy path" "Search…" "Edges…" "Plan…" "Set view…"))
+           (act (completing-read "Action: " choices nil t)))
+      (pcase act
+        ("Open" (call-interactively #'atlas-entity-tree-open-at-point))
+        ("Peek" (call-interactively #'atlas-entity-tree-peek-at-point))
+        ("Copy path" (call-interactively #'atlas-entity-tree-copy-at-point))
+        ("Search…" (call-interactively #'atlas-entity-tree-search-command))
+        ("Edges…" (call-interactively #'atlas-entity-tree-edges-command))
+        ("Plan…" (call-interactively #'atlas-entity-tree-plan-command))
+        ("Set view…"
+         (call-interactively #'atlas-entity-tree-set-view))))))
 
 (defun atlas-entity-tree--follow-post-command ()
   "Internal: in follow-mode, auto-peek item under point. Returns t."
@@ -575,6 +753,7 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
     (ignore-errors (atlas-entity-tree-peek-at-point)))
   t)
 
+;;;###autoload
 (define-minor-mode atlas-entity-tree-follow-mode
   "Toggle follow-mode in Atlas entity tree: auto-peek as point moves."
   :init-value nil
@@ -584,6 +763,7 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
       (add-hook 'post-command-hook #'atlas-entity-tree--follow-post-command nil t)
     (remove-hook 'post-command-hook #'atlas-entity-tree--follow-post-command t)))
 
+;;;###autoload
 (defun atlas-entity-tree-toggle-follow ()
   "Toggle follow-mode in current entity tree buffer."
   (interactive)
@@ -604,17 +784,25 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
     (define-key map (kbd "p")   #'atlas-entity-tree-peek-at-point)
     (define-key map (kbd "i")   #'atlas-entity-tree-toggle-follow)
     (define-key map (kbd "a")   #'atlas-entity-tree-actions)
+    ;; quick commands for views
+    (define-key map (kbd "s")   #'atlas-entity-tree-search-command)
+    (define-key map (kbd "E")   #'atlas-entity-tree-edges-command)
+    (define-key map (kbd "P")   #'atlas-entity-tree-plan-command)
     map)
   "Keymap for =atlas-entity-tree-mode'.")
 
+;;;###autoload
 (define-derived-mode atlas-entity-tree-mode special-mode "Atlas-Entities"
   "Major mode for Atlas entity tree visualization.
 Keys:
   g       refresh
   RET/o   open item
   p       peek item
+  s       search view (prompt)
+  E       edges view (prompt)
+  P       plan view (prompt)
   i       toggle follow-mode (auto-peek on cursor move)
-  a       actions menu"
+  a       actions menu (transient if available; fallback to simple menu)"
   :group 'atlas-entity-tree
   (setq buffer-read-only t))
 

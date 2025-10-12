@@ -124,7 +124,7 @@
 - Инкрементальность
   - Провайдер может работать в режимах: полный обход или ограничение списком файлов.
   - При :file REL в батче: для REL удаляются старые символы/рёбра и добавляются новые.
-  - Детектор изменений: сравнение size/mtime и опц. sha256 (если atlas-hash-content=t, файлы ≤ atlas-max-file-size).
+  - Детектор изменений: сравнение size/mtime и, при включённом atlas-hash-content, по sha256 (если atlas-hash-content=t, файлы ≤ atlas-max-file-size).
   - TTL политика: если t-indexed > atlas-index-ttl → полный прогон; иначе — changed-only на основе детектора изменений.
 
 - Асинхронность/UX
@@ -183,7 +183,7 @@
 - Интеграция с Context Navigator
 - Группы контекста
   - atlas-build-context-group ROOT query → {:files … :spans … :rationale … :est-tokens …}
-  - atlas-export-to-context GROUP → заглушка для интеграции с Navigator.
+  - atlas-export-to-context GROUP → зарезервировано для интеграции с Navigator.
 
 - Конфигурация (defgroup atlas)
 - Индексация и хранение
@@ -461,7 +461,7 @@ graph LR
   - M4 визуализацию можно развивать поверх уже доступного DOT/Mermaid.
 
 - Визуализация: Atlas Entities (дерево сущностей)
-  - Режим/буфер: major-mode =atlas-entity-tree-mode=, окно “*Atlas Entities*”.
+  - Режим/буфер: major-mode =atlas-entity-tree-mode=, окно “*Atlas Entities/”.
   - Представления: by-feature (фичи → файлы), by-kind (символы по виду), search (результаты + In/Out edges),
     imports (обзор require/provide), edges (локальная окрестность селектора), plan (файлы/спаны по запросу).
   - Команды: =atlas-entity-tree=, =atlas-entity-tree-set-view=, =atlas-entity-tree-search=,

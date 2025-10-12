@@ -21,6 +21,7 @@
 (require 'atlas-sources)      ; registry/runner
 ;; (require 'atlas-index)     ; avoid circular require; see forward decls below
 (require 'atlas-source-elisp) ; default built-in provider (v1)
+(require 'atlas-entity-tree)   ; UI: entity tree
 
 ;; Forward decls to avoid cycles
 (declare-function atlas-run-sources "atlas-sources"

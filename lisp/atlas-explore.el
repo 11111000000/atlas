@@ -18,6 +18,7 @@
     map)
   "Keymap for `atlas-explore-mode'.")
 
+;;;###autoload
 (define-derived-mode atlas-explore-mode special-mode "Atlas-Explore"
   "Minor explorer for Atlas results.
 Keys:
@@ -34,6 +35,7 @@ Keys:
     (goto-char (or beg 1))
     (recenter)))
 
+;;;###autoload
 (defun atlas-explore-open-at-point ()
   "Open item at point using text properties set by explorer."
   (interactive)
