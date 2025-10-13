@@ -28,9 +28,9 @@
   :type '(choice (const by-feature) (const by-kind) (const search) (symbol))
   :group 'atlas-entity-tree)
 
-(defcustom atlas-entity-tree-section-style (if (featurep 'magit-section) 'magit-section 'text)
-  "Renderer backend: 'magit-section or 'text (fallback)."
-  :type '(choice (const magit-section) (const text))
+(defcustom atlas-entity-tree-section-style 'text
+  "Renderer backend: 'text only (no external dependencies)."
+  :type '(const text)
   :group 'atlas-entity-tree)
 
 (defcustom atlas-entity-tree-max-children 200
@@ -192,86 +192,79 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
     (seq-sort #'string< (seq-uniq (seq-filter #'stringp rels)))))
 
 (defun atlas-entity-tree--insert-by-feature (root)
-  "Insert textual tree for 'by-feature view for ROOT."
+  "Insert textual tree for 'by-feature view for ROOT.
+Structure:
+▸ Features (N):
+  ▸ <icon> feature:NAME [main.el]
+    ▸ <kind-icon> symbol [Kind]
+      (def<kind> symbol) — first doc line"
   (let* ((state (atlas-entity-tree--state root))
          (features (atlas-entity-tree--collect-features state)))
-    (cl-labels
-        ((atlas-entity-tree--print-file-and-symbols
-           (rel)
-           ;; File line (clickable)
-           (let ((lstart (point)))
-             (insert (format "    %s %s\n" (or (atlas-entity-tree--icon 'file rel) "") rel))
-             (add-text-properties
-              lstart (line-end-position 0)
-              (list 'atlas-root (file-name-as-directory (expand-file-name root))
-                    'atlas-rel rel
-                    'mouse-face 'highlight)))
-           ;; Symbols defined in this file
-           (let* ((idxs (plist-get state :indexes))
-                  (by-id (and idxs (plist-get idxs atlas-model--k-sym-by-id)))
-                  (syms '()))
-             (when (hash-table-p by-id)
-               (maphash
-                (lambda (_id s)
-                  (when (equal (plist-get s :file) rel)
-                    (push s syms)))
-                by-id))
-             ;; Stable sort: by :beg then by :name
-             (setq syms
-                   (seq-sort
-                    (lambda (a b)
-                      (let* ((ba (or (plist-get a :beg) 0))
-                             (bb (or (plist-get b :beg) 0))
-                             (na (or (plist-get a :name) ""))
-                             (nb (or (plist-get b :name) "")))
-                        (or (< ba bb)
-                            (and (= ba bb) (string-lessp na nb)))))
-                    syms))
-             (let* ((total (length syms))
-                    (limit 20)
-                    (shown (if (> total limit) (seq-take syms limit) syms)))
-               (insert (format "      Symbols (%d):\n" total))
-               (dolist (s shown)
-                 (let* ((name (or (plist-get s :name) "symbol"))
-                        (kind (or (plist-get s :kind) 'symbol))
-                        (sig  (or (plist-get s :sig) ""))
-                        (doc1 (or (plist-get s :doc1) ""))
-                        (beg  (or (plist-get s :beg) 1))
-                        (kstr (capitalize (symbol-name kind)))
-                        (lstart2 (point)))
-                   (insert (format "        %s %s [%s]"
-                                   (or (atlas-entity-tree--icon 'kind kind) "")
-                                   name kstr))
-                   (when (and (stringp sig) (> (length sig) 0))
-                     (insert (format "  %s" sig)))
-                   (when (and (stringp doc1) (> (length doc1) 0))
-                     (let ((first (car (split-string doc1 "\n" t))))
-                       (when (and first (> (length first) 0))
-                         (insert (format " — %s" first)))))
-                   (insert "\n")
-                   ;; Make symbol line clickable (opens file at :beg)
-                   (add-text-properties
-                    lstart2 (line-end-position 0)
-                    (list 'atlas-root (file-name-as-directory (expand-file-name root))
-                          'atlas-rel rel
-                          'atlas-beg beg
-                          'mouse-face 'highlight))))
-               (when (> total (length shown))
-                 (insert (format "        … and %d more\n" (- total (length shown)))))))))
-      (insert (format "Features (%d):\n" (length features)))
-      (dolist (feat features)
-        (let* ((provided (atlas-entity-tree--files-for-feature state feat 'provide))
-               (required (atlas-entity-tree--files-for-feature state feat 'require)))
-          ;; Feature header
-          (insert (format "- %s %s\n" (or (atlas-entity-tree--icon 'feature feat) "") feat))
-          ;; Providers
-          (insert (format "  Provided by (%d):\n" (length provided)))
-          (dolist (rel provided)
-            (atlas-entity-tree--print-file-and-symbols rel))
-          ;; Requirees
-          (insert (format "  Required by (%d):\n" (length required)))
-          (dolist (rel required)
-            (atlas-entity-tree--print-file-and-symbols rel)))))))
+    (insert (format "▸ Features (%d):\n" (length features)))
+    (dolist (feat features)
+      (let* ((provided (atlas-entity-tree--files-for-feature state feat 'provide))
+             (main (car provided))
+             (fname (and main (file-name-nondirectory main))))
+        ;; Feature header with primary provider file (if any) in brackets
+        (insert (format "  ▸ %s %s%s\n"
+                        (or (atlas-entity-tree--icon 'feature feat) "")
+                        feat
+                        (if fname (format " [%s]" fname) "")))
+        ;; Collect symbols from the primary provider file and render as foldable items
+        (when main
+          (let* ((idxs (plist-get state :indexes))
+                 (by-id (and idxs (plist-get idxs atlas-model--k-sym-by-id)))
+                 (syms '()))
+            (when (hash-table-p by-id)
+              (maphash
+               (lambda (_id s)
+                 (when (equal (plist-get s :file) main)
+                   (push s syms)))
+               by-id))
+            ;; Stable order: by :beg, then by :name
+            (setq syms
+                  (seq-sort
+                   (lambda (a b)
+                     (let* ((ba (or (plist-get a :beg) 0))
+                            (bb (or (plist-get b :beg) 0))
+                            (na (or (plist-get a :name) ""))
+                            (nb (or (plist-get b :name) "")))
+                       (or (< ba bb)
+                           (and (= ba bb) (string-lessp na nb)))))
+                   syms))
+            (dolist (s syms)
+              (let* ((name (or (plist-get s :name) "symbol"))
+                     (kind (or (plist-get s :kind) 'symbol))
+                     (sig  (or (plist-get s :sig) ""))
+                     (doc1 (or (plist-get s :doc1) ""))
+                     (beg  (or (plist-get s :beg) 1))
+                     (kstr (capitalize (symbol-name kind)))
+                     (defkw (pcase kind
+                              ('function "defun")
+                              ('macro    "defmacro")
+                              ('var      "defvar")
+                              ('custom   "defcustom")
+                              ('const    "defconst")
+                              (_         "def"))))
+                ;; Symbol heading (foldable)
+                (let ((lstart (point)))
+                  (insert (format "    ▸ %s %s [%s]"
+                                  (or (atlas-entity-tree--icon 'kind kind) "")
+                                  name kstr))
+                  (insert "\n")
+                  (add-text-properties
+                   lstart (line-end-position 0)
+                   (list 'atlas-root (file-name-as-directory (expand-file-name root))
+                         'atlas-rel main
+                         'atlas-beg beg
+                         'mouse-face 'highlight)))
+                ;; Body line with definition + first doc line (hidden by default via fold)
+                (let ((first (car (and (stringp doc1) (split-string doc1 "\n" t)))))
+                  (insert (format "      (%s %s)%s\n"
+                                  defkw name
+                                  (if (and first (> (length first) 0))
+                                      (format " — %s" first)
+                                    ""))))))))))))
 
 (defun atlas-entity-tree--all-symbols (state)
   "Return list of symbol plists from STATE via inverted index."
@@ -582,33 +575,175 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
   "Render tree for ROOT using simple text fallback."
   (let ((inhibit-read-only t))
     (erase-buffer)
-    (insert (atlas-entity-tree--status-line root) "\n\n")
+    ;; Оставляем только одну пустую строку после статуса, чтобы не было "пустого заголовка" с ▸.
+    (insert (atlas-entity-tree--status-line root) "\n")
     (atlas-entity-tree--insert-view root)
+    ;; Collapse all foldable nodes by default and set markers to collapsed.
+    (save-excursion (atlas-entity-tree--fold-all))
     (goto-char (point-min))))
 
+(defun atlas-entity-tree--fold-all ()
+  "Create fold overlays for all foldable headings and collapse them."
+  (save-excursion
+    (goto-char (point-min))
+    (while (not (eobp))
+      (let ((kind (atlas-entity-tree--fold-head-kind)))
+        (when kind
+          ;; Ensure collapsed marker at heading
+          (save-excursion
+            (beginning-of-line)
+            (skip-chars-forward " \t")
+            (let ((inhibit-read-only t))
+              (cond
+               ((looking-at "[▾▸]")
+                (replace-match "▸" t t))
+               (t
+                (insert "▸ ")))))
+          ;; Ensure overlay exists and is collapsed
+          (let* ((lvl (atlas-entity-tree--fold-level kind))
+                 (lbeg (line-beginning-position))
+                 (lend (line-end-position))
+                 (ov (or (get-text-property lbeg 'atlas-fold-ov)
+                         (get-text-property lend 'atlas-fold-ov))))
+            (unless (overlayp ov)
+              (save-excursion
+                (goto-char lbeg)
+                (let* ((body-beg (progn (forward-line 1) (point)))
+                       (body-end (atlas-entity-tree--next-header-pos lvl)))
+                  (when (< body-beg body-end)
+                    (setq ov (make-overlay body-beg body-end))
+                    (overlay-put ov 'is-atlas-fold t)
+                    (overlay-put ov 'invisible 'atlas-fold)
+                    (put-text-property lbeg lend 'atlas-fold-ov ov)))))))
+        (forward-line 1)))))
+
+;; --- Text folding helpers (no external deps) ---
+
+(defun atlas-entity-tree--fold-head-kind ()
+  "Return foldable heading kind at point or nil.
+Kinds: 'features | 'feature | 'sym | 'provided | 'required | 'file | 'symbols.
+'sym is a foldable symbol heading."
+  (save-excursion
+    (beginning-of-line)
+    (cond
+     ;; ▸ Features (N):
+     ((looking-at "^[[:space:]]*[▾▸]\\s-+Features\\s-*(\\([0-9]+\\)):\\s-*$") 'features)
+     ;; ▸ <icon> feature:NAME [file]
+     ((looking-at "^[[:space:]]*[▾▸]\\s-+\\S+\\s-+feature:") 'feature)
+     ;;     ▸ <icon> name [Kind]   (symbol heading)
+     ((looking-at "^[[:space:]]+[▾▸]\\s-+\\S+\\s-+[^[]+\\[[^]]+\\]\\s-*$") 'sym)
+     ;; legacy (other views) — keep support
+     ((looking-at "^[[:space:]]+[▾▸]\\s-+Provided by\\s-*(\\([0-9]+\\)):\\s-*$") 'provided)
+     ((looking-at "^[[:space:]]+[▾▸]\\s-+Required by\\s-*(\\([0-9]+\\)):\\s-*$") 'required)
+     ((looking-at "^[[:space:]]+[▾▸]\\s-+\\(?:\\S+\\s-+\\)?\\([^[:space:]]+\\.el\\)\\s-*$") 'file)
+     ((looking-at "^[[:space:]]+[▾▸]\\s-+Symbols\\s-*(\\([0-9]+\\)):\\s-*$") 'symbols)
+     (t nil))))
+
+(defun atlas-entity-tree--fold-level (kind)
+  "Map KIND to synthetic hierarchy level."
+  (pcase kind
+    ('features 0)
+    ('feature 1)
+    ('sym 2)
+    ((or 'provided 'required) 2)
+    ('file 3)
+    ('symbols 4)
+    (_ nil)))
+
+(defun atlas-entity-tree--next-header-pos (level)
+  "Return point at the next header with level <= LEVEL, or point-max."
+  (save-excursion
+    (while (progn
+             (forward-line 1)
+             (and (not (eobp))
+                  (let* ((k (atlas-entity-tree--fold-head-kind))
+                         (kl (and k (atlas-entity-tree--fold-level k))))
+                    (or (null k) (> kl level))))))
+    (point)))
+
+;; Navigation between foldable headings (no external deps)
+
+(defun atlas-entity-tree--goto-heading (dir)
+  "Move point to the next (DIR>0) or previous (DIR<0) foldable heading. Return non-nil if moved."
+  (catch 'done
+    (while (if (> dir 0) (not (eobp)) (not (bobp)))
+      (forward-line dir)
+      (when (atlas-entity-tree--fold-head-kind)
+        (beginning-of-line)
+        (recenter nil)
+        (throw 'done t)))
+    (message (if (> dir 0) "No next heading" "No previous heading"))
+    nil))
+
+(defun atlas-entity-tree-next-heading ()
+  "Jump to next foldable heading (same buffer)."
+  (interactive)
+  (unless (derived-mode-p 'atlas-entity-tree-mode)
+    (user-error "Not in atlas-entity-tree buffer"))
+  (atlas-entity-tree--goto-heading +1))
+
+(defun atlas-entity-tree-prev-heading ()
+  "Jump to previous foldable heading (same buffer)."
+  (interactive)
+  (unless (derived-mode-p 'atlas-entity-tree-mode)
+    (user-error "Not in atlas-entity-tree buffer"))
+  (atlas-entity-tree--goto-heading -1))
+
+;;;###autoload
+(defun atlas-entity-tree-toggle-fold-at-point ()
+  "Toggle fold for subtree starting at the heading on current line.
+Supported headings:
+- Features (...)
+- <icon> feature:NAME
+-   Provided by (...)
+-     <icon> path/to/file.el
+-       Symbols (...)"
+  (interactive)
+  (unless (derived-mode-p 'atlas-entity-tree-mode)
+    (user-error "Not in atlas-entity-tree buffer"))
+  (let* ((kind (atlas-entity-tree--fold-head-kind)))
+    (if (null kind)
+        (message "Not a foldable heading")
+      (let* ((lvl (atlas-entity-tree--fold-level kind))
+             (lbeg (line-beginning-position))
+             (lend (line-end-position))
+             (ov (or (get-text-property lbeg 'atlas-fold-ov)
+                     (get-text-property lend 'atlas-fold-ov)))
+             (created nil))
+        (unless (overlayp ov)
+          (save-excursion
+            (goto-char lbeg)
+            (let* ((body-beg (progn (forward-line 1) (point)))
+                   (body-end (atlas-entity-tree--next-header-pos lvl)))
+              (when (< body-beg body-end)
+                (setq ov (make-overlay body-beg body-end))
+                (overlay-put ov 'is-atlas-fold t)
+                (overlay-put ov 'invisible 'atlas-fold)
+                (put-text-property lbeg lend 'atlas-fold-ov ov)
+                (setq created t)))))
+        (if (overlayp ov)
+            (progn
+              (let ((new-inv
+                     (if created
+                         nil
+                       (let ((cur (overlay-get ov 'invisible)))
+                         (if cur nil 'atlas-fold)))))
+                (overlay-put ov 'invisible new-inv)
+                ;; Update fold marker on the heading line
+                (save-excursion
+                  (beginning-of-line)
+                  (skip-chars-forward " \t")
+                  (let ((inhibit-read-only t))
+                    (cond
+                     ((looking-at "[▾▸]")
+                      (replace-match (if new-inv "▸" "▾") t t))
+                     (t
+                      (insert (if new-inv "▸ " "▾ "))))))))
+          (message "Nothing to fold under this heading"))))))
+
 (defun atlas-entity-tree--render (root)
-  "Render tree using selected backend for ROOT."
-  (pcase atlas-entity-tree-section-style
-    ('magit-section
-     (if (featurep 'magit-section)
-         (progn
-           (require 'magit-section)
-           (let ((inhibit-read-only t))
-             (erase-buffer)
-             (magit-insert-section (atlas-entity-tree-root)
-               (magit-insert-heading (atlas-entity-tree--status-line root))
-               (insert "\n")
-               (magit-insert-section (atlas-entity-tree-view)
-                 (magit-insert-heading
-                   (format "View: %s"
-                           (or (and atlas-entity-tree--view (symbol-name atlas-entity-tree--view))
-                               (symbol-name atlas-entity-tree-default-view))))
-                 (insert "\n")
-                 (atlas-entity-tree--insert-view root))))
-           (goto-char (point-min)))
-       ;; Fallback to text if magit-section not truly available
-       (atlas-entity-tree--render-text root)))
-    (_ (atlas-entity-tree--render-text root))))
+  "Render tree using built-in text backend for ROOT (no external deps)."
+  (atlas-entity-tree--render-text root))
 
 ;;;###autoload
 (defun atlas-entity-tree-refresh (&optional hard)
@@ -916,10 +1051,16 @@ Otherwise, fallback to a simple completing-read menu."
     (define-key map (kbd "g")   #'atlas-entity-tree-refresh)
     (define-key map (kbd "RET") #'atlas-entity-tree-open-at-point)
     (define-key map (kbd "o")   #'atlas-entity-tree-open-at-point)
-    (define-key map (kbd "p")   #'atlas-entity-tree-peek-at-point)
+    (define-key map (kbd "v")   #'atlas-entity-tree-peek-at-point)
     (define-key map (kbd "d")   #'atlas-entity-tree-toggle-docstring-at-point)
     (define-key map (kbd "i")   #'atlas-entity-tree-toggle-follow)
     (define-key map (kbd "a")   #'atlas-entity-tree-actions)
+    (define-key map (kbd "TAB") #'atlas-entity-tree-toggle-fold-at-point)
+    ;; navigation between headings
+    (define-key map (kbd "n")   #'atlas-entity-tree-next-heading)
+    (define-key map (kbd "p")   #'atlas-entity-tree-prev-heading)
+    (define-key map (kbd "j")   #'atlas-entity-tree-next-heading)
+    (define-key map (kbd "k")   #'atlas-entity-tree-prev-heading)
     ;; quick commands for views
     (define-key map (kbd "s")   #'atlas-entity-tree-search-command)
     (define-key map (kbd "E")   #'atlas-entity-tree-edges-command)
@@ -933,14 +1074,25 @@ Otherwise, fallback to a simple completing-read menu."
 Keys:
   g       refresh
   RET/o   open item
-  p       peek item
+  v       peek item
+  TAB     toggle fold at heading
+  n/j     next heading
+  p/k     previous heading
   s       search view (prompt)
   E       edges view (prompt)
   P       plan view (prompt)
   i       toggle follow-mode (auto-peek on cursor move)
   a       actions menu (transient if available; fallback to simple menu)"
   :group 'atlas-entity-tree
-  (setq buffer-read-only t))
+  (setq buffer-read-only t)
+  ;; Ensure overlays with (overlay-put ov 'invisible 'atlas-fold) are actually hidden.
+  (setq-local buffer-invisibility-spec
+              (if (eq buffer-invisibility-spec t)
+                  t
+                (cons 'atlas-fold
+                      (if (listp buffer-invisibility-spec)
+                          buffer-invisibility-spec
+                        nil)))))
 
 ;;;###autoload
 (cl-defun atlas-entity-tree (root)
