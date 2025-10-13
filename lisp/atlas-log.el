@@ -9,6 +9,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 
+;;;###autoload
 (defgroup atlas-log nil
   "Logging for Atlas."
   :group 'atlas

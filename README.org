@@ -21,6 +21,9 @@ Atlas is a universal, extensible project map for Emacs. It builds and uses a str
 * Requirements
 - Emacs ≥ 27.1
 - Optional: ~elisp-refs~ (reserved for deeper call/ref; off by default)
+- Optional: ~transient~ (actions menu in Atlas Entities; optional)
+- Optional: ~all-the-icons~ (icons in entity tree; optional)
+- Optional: ~posframe~ (peek backend used by some setups; optional)
 - No external services; fully offline by default
 
 - Installation
@@ -337,8 +340,11 @@ A project map view “around entities” (features, files, symbols, edges), simi
   - g       refresh
   - RET/o   open item (file at position)
   - p       peek (open file preview in a side window)
+  - s       open Search view (prompt)
+  - E       open Edges view (prompt)
+  - P       open Plan view (prompt)
   - i       toggle follow-mode (auto-peek as point moves)
-  - a       actions menu (Open / Peek / Copy path)
+  - a       actions menu (transient if available; includes Open / Peek / Copy / Search / Edges / Plan)
 
 - Behavior
   - Reacts to indexing events (:atlas-index-start/progress/done) and auto-refreshes when enabled

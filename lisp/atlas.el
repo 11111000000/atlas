@@ -20,8 +20,7 @@
 (require 'atlas-store)
 (require 'atlas-sources)      ; registry/runner
 ;; (require 'atlas-index)     ; avoid circular require; see forward decls below
-(require 'atlas-source-elisp) ; default built-in provider (v1)
-(require 'atlas-entity-tree)   ; UI: entity tree
+
 
 ;; Forward decls to avoid cycles
 (declare-function atlas-run-sources "atlas-sources"
@@ -31,6 +30,7 @@
 (declare-function atlas-events-publish "atlas-events" (topic &rest args))
 (declare-function atlas-index--detect-changes "atlas-index" (root))
 
+;;;###autoload
 (defgroup atlas nil
   "Universal project map for Emacs."
   :group 'tools
@@ -375,6 +375,47 @@ If nil, apply TTL/changed-only policy: full if TTL expired, else changed-only."
          (res (atlas-query root query :k k)))
     (message "Top %d results returned" (length res))
     res))
+
+;; Autoload forwarders for optional Atlas modules (UI, tree, explorer, watch, export, log, index)
+;; UI
+(autoload 'atlas-progress-mode "atlas-ui" nil t)
+
+;; Entity tree UI
+(autoload 'atlas-entity-tree "atlas-entity-tree" nil t)
+(autoload 'atlas-entities "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-refresh "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-open-at-point "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-peek-at-point "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-copy-at-point "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-actions "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-toggle-follow "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-search "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-edges "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-plan "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-search-command "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-edges-command "atlas-entity-tree" nil t)
+(autoload 'atlas-entity-tree-plan-command "atlas-entity-tree" nil t)
+
+;; Explorer
+(autoload 'atlas-explore "atlas-explore" nil t)
+(autoload 'atlas-explore-open-at-point "atlas-explore" nil t)
+
+;; Export commands
+(autoload 'atlas-graph-export-command "atlas-export" nil t)
+(autoload 'atlas-export-llm-command "atlas-export" nil t)
+
+;; Watch mode
+(autoload 'atlas-watch-mode "atlas-watch" nil t)
+(autoload 'atlas-watch-add-root "atlas-watch" nil t)
+(autoload 'atlas-watch-remove-root "atlas-watch" nil t)
+(autoload 'atlas-watch-list-roots "atlas-watch" nil t)
+
+;; Log helpers
+(autoload 'atlas-log-open "atlas-log" nil t)
+(autoload 'atlas-log-clear "atlas-log" nil t)
+
+;; Index helpers
+(autoload 'atlas-update "atlas-index" nil t)
 
 (provide 'atlas)
 

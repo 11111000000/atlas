@@ -17,6 +17,7 @@
 (require 'atlas-graph)
 (require 'atlas-plan)
 
+;;;###autoload
 (defgroup atlas-entity-tree nil
   "Entity-centric tree visualization for Atlas."
   :group 'atlas

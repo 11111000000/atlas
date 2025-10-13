@@ -10,6 +10,7 @@
 (require 'atlas-log)
 (require 'atlas-events)
 
+;;;###autoload
 (defgroup atlas-ui nil
   "UI helpers for Atlas."
   :group 'atlas

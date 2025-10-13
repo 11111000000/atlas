@@ -466,7 +466,8 @@ graph LR
     imports (обзор require/provide), edges (локальная окрестность селектора), plan (файлы/спаны по запросу).
   - Команды: =atlas-entity-tree=, =atlas-entity-tree-set-view=, =atlas-entity-tree-search=,
     =atlas-entity-tree-edges=, =atlas-entity-tree-plan=.
-  - Клавиши: g — refresh; RET/o — открыть; p — peek; i — follow-mode; a — меню действий.
+  - Иконки: у каждого узла отображается иконка по типу элемента (feature/file/symbol-kind); тема иконок настраивается.
+  - Клавиши: g — refresh; RET/o — открыть; TAB — fold/unfold; p — peek; s — search view; E — edges view; P — plan view; i — follow-mode; a — меню действий (transient при наличии).
   - События: реакция на :atlas-index-start/progress/done/error; авто-refresh при =atlas-entity-tree-auto-refresh=.
   - Производительность: ленивый вывод, стабильная сортировка, отсутствие блокирующего I/O в UI.
   - Тесты (ERT): =test-entity-tree-*.el= покрывают открытие буфера, представления и базовые действия.

@@ -10,7 +10,8 @@
 (require 'subr-x)
 (require 'atlas-log)
 (require 'atlas)
-(require 'atlas-index)
+;; Lazy-load indexing API when first used by watch.
+(autoload 'atlas-index-async "atlas-index" nil nil)
 
 (defcustom atlas-watch-file-regexp "\\.el\\'"
   "Regexp of files that trigger reindex in watch events.

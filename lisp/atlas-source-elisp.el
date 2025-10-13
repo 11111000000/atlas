@@ -16,6 +16,7 @@
 (declare-function atlas-root-dir "atlas" (root))
 (declare-function atlas--symbol-id "atlas" (&key lang rel name beg end kind))
 
+;;;###autoload
 (defgroup atlas-elisp nil
   "Elisp source for Atlas."
   :group 'atlas
