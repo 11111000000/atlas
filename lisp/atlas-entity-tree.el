@@ -39,9 +39,78 @@
   :group 'atlas-entity-tree)
 
 (defcustom atlas-entity-tree-icons t
-  "If non-nil, show icons (future use)."
+  "If non-nil, show icons for features/files/symbol kinds when available (all-the-icons optional)."
   :type 'boolean
   :group 'atlas-entity-tree)
+
+;; Optional icons support
+(defvar atlas-entity-tree--icons-loaded (require 'all-the-icons nil 'noerror)
+  "Non-nil when all-the-icons is available.")
+
+(defun atlas-entity-tree--icon (type &optional arg)
+  "Return icon string for TYPE and ARG if =atlas-entity-tree-icons' is non-nil.
+TYPE is one of 'feature, 'file, or 'kind (ARG = kind symbol)."
+  (when atlas-entity-tree-icons
+    (let ((ai (featurep 'all-the-icons)))
+      (pcase type
+        ('feature
+         (if ai
+             (or (and (fboundp 'all-the-icons-octicon)
+                      (all-the-icons-octicon "package" :v-adjust 0.0))
+                 (and (fboundp 'all-the-icons-material)
+                      (all-the-icons-material "extension" :v-adjust 0.0))
+                 "[F]")
+           "[F]"))
+        ('file
+         (if ai
+             (let* ((name (and (stringp arg) (file-name-nondirectory arg)))
+                    (ico (and (fboundp 'all-the-icons-icon-for-file)
+                              (all-the-icons-icon-for-file (or name "")))))
+               (or ico
+                   (and (fboundp 'all-the-icons-material)
+                        (all-the-icons-material "insert_drive_file" :v-adjust 0.0))
+                   "[file]"))
+           "[file]"))
+        ('kind
+         (let* ((k (if (symbolp arg) arg (and (stringp arg) (intern-soft arg)))))
+           (cond
+            (ai
+             (pcase k
+               ('function (and (fboundp 'all-the-icons-material)
+                               (all-the-icons-material "functions" :v-adjust 0.0)))
+               ('macro    (and (fboundp 'all-the-icons-octicon)
+                               (all-the-icons-octicon "zap" :v-adjust 0.0)))
+               ('var      (and (fboundp 'all-the-icons-octicon)
+                               (all-the-icons-octicon "gear" :v-adjust 0.0)))
+               ('custom   (and (fboundp 'all-the-icons-material)
+                               (all-the-icons-material "settings" :v-adjust 0.0)))
+               ('const    (and (fboundp 'all-the-icons-material)
+                               (all-the-icons-material "lock" :v-adjust 0.0)))
+               (_         (and (fboundp 'all-the-icons-faicon)
+                               (all-the-icons-faicon "tag" :v-adjust 0.0)))))
+            (t
+             (pcase k
+               ('function "ƒ")
+               ('macro    "μ")
+               ('var      "𝑣")
+               ('custom   "☰")
+               ('const    "○")
+               (_         "*"))))))
+        (_ "")))))
+
+;; Docstring expand/collapse
+(defcustom atlas-entity-tree-doc-max-lines 12
+  "Max number of docstring lines to show when expanded."
+  :type 'integer
+  :group 'atlas-entity-tree)
+
+(defcustom atlas-entity-tree-doc-ellipsis "…"
+  "Ellipsis marker appended when docstring is truncated."
+  :type 'string
+  :group 'atlas-entity-tree)
+
+(defvar-local atlas-entity-tree--doc-cache (make-hash-table :test #'equal)
+  "Cache for docstrings keyed by (REL . BEG) in the tree buffer.")
 
 (defcustom atlas-entity-tree-auto-refresh t
   "If non-nil, auto-refresh tree on :atlas-index-done events."
@@ -131,7 +200,7 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
            (rel)
            ;; File line (clickable)
            (let ((lstart (point)))
-             (insert (format "    %s\n" rel))
+             (insert (format "    %s %s\n" (or (atlas-entity-tree--icon 'file rel) "") rel))
              (add-text-properties
               lstart (line-end-position 0)
               (list 'atlas-root (file-name-as-directory (expand-file-name root))
@@ -170,7 +239,9 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
                         (beg  (or (plist-get s :beg) 1))
                         (kstr (capitalize (symbol-name kind)))
                         (lstart2 (point)))
-                   (insert (format "        %s [%s]" name kstr))
+                   (insert (format "        %s %s [%s]"
+                                   (or (atlas-entity-tree--icon 'kind kind) "")
+                                   name kstr))
                    (when (and (stringp sig) (> (length sig) 0))
                      (insert (format "  %s" sig)))
                    (when (and (stringp doc1) (> (length doc1) 0))
@@ -192,7 +263,7 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
         (let* ((provided (atlas-entity-tree--files-for-feature state feat 'provide))
                (required (atlas-entity-tree--files-for-feature state feat 'require)))
           ;; Feature header
-          (insert (format "- %s\n" feat))
+          (insert (format "- %s %s\n" (or (atlas-entity-tree--icon 'feature feat) "") feat))
           ;; Providers
           (insert (format "  Provided by (%d):\n" (length provided)))
           (dolist (rel provided)
@@ -257,8 +328,9 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
             (let* ((name (or (plist-get s :name) "symbol"))
                    (rel (or (plist-get s :file) ""))
                    (beg (or (plist-get s :beg) 1))
+                   (icon (or (atlas-entity-tree--icon 'kind (plist-get s :kind)) ""))
                    (lstart (point)))
-              (insert (format "    %s  file=%s\n" name rel))
+              (insert (format "    %s %s  file=%s\n" icon name rel))
               (add-text-properties
                lstart (line-end-position 0)
                (list 'atlas-root (file-name-as-directory (expand-file-name root))
@@ -298,9 +370,12 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
              (rel (or (alist-get :file r) ""))
              (range (alist-get :range r))
              (beg (or (car-safe range) 1)))
-        (insert (format "- %s  score=%s\n" name score))
+        (let* ((sym (and (alist-get :id r)
+                         (atlas-model-get-symbol state (alist-get :id r))))
+               (icon (or (atlas-entity-tree--icon 'kind (and sym (plist-get sym :kind))) "")))
+          (insert (format "- %s %s  score=%s\n" icon name score)))
         (let ((lstart (point)))
-          (insert (format "  file=%s\n" rel))
+          (insert (format "  %s %s\n" (or (atlas-entity-tree--icon 'file rel) "") rel))
           (add-text-properties
            lstart (line-end-position 0)
            (list 'atlas-root (file-name-as-directory (expand-file-name root))
@@ -312,17 +387,35 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
                (eout (or eout '())))
           (insert (format "  Out edges (%d):\n" (length eout)))
           (dolist (e eout)
-            (insert (format "    %s -> %s\n"
-                            (format "%s" (plist-get e :type))
-                            (format "%s" (plist-get e :to))))))
+            (let* ((type (format "%s" (plist-get e :type)))
+                   (to   (format "%s" (plist-get e :to))))
+              (insert (format "    %s -> " type))
+              (let ((p1 (point)))
+                (insert to)
+                (add-text-properties
+                 p1 (point)
+                 (list 'atlas-edge-target to
+                       'atlas-root (file-name-as-directory (expand-file-name root))
+                       'mouse-face 'highlight
+                       'help-echo (format "Jump to %s" to))))
+              (insert "\n"))))
         ;; In edges (to file)
         (let* ((ein (and (stringp rel) (atlas-model-edges-in state rel)))
                (ein (or ein '())))
           (insert (format "  In edges (%d):\n" (length ein)))
           (dolist (e ein)
-            (insert (format "    %s <- %s\n"
-                            (format "%s" (plist-get e :type))
-                            (format "%s" (plist-get e :from))))))
+            (let* ((type (format "%s" (plist-get e :type)))
+                   (from (format "%s" (plist-get e :from))))
+              (insert (format "    %s <- " type))
+              (let ((p1 (point)))
+                (insert from)
+                (add-text-properties
+                 p1 (point)
+                 (list 'atlas-edge-target from
+                       'atlas-root (file-name-as-directory (expand-file-name root))
+                       'mouse-face 'highlight
+                       'help-echo (format "Jump to %s" from))))
+              (insert "\n"))))
         (insert "\n")))))
 
 (defun atlas-entity-tree--insert-imports (root)
@@ -343,14 +436,32 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
              (in  (or (atlas-model-edges-in state sel) '())))
         (insert (format "  Out edges (%d):\n" (length out)))
         (dolist (e out)
-          (insert (format "    %s -> %s\n"
-                          (format "%s" (plist-get e :type))
-                          (format "%s" (plist-get e :to)))))
+          (let* ((type (format "%s" (plist-get e :type)))
+                 (to   (format "%s" (plist-get e :to))))
+            (insert (format "    %s -> " type))
+            (let ((p1 (point)))
+              (insert to)
+              (add-text-properties
+               p1 (point)
+               (list 'atlas-edge-target to
+                     'atlas-root (file-name-as-directory (expand-file-name root))
+                     'mouse-face 'highlight
+                     'help-echo (format "Jump to %s" to))))
+            (insert "\n")))
         (insert (format "  In edges (%d):\n" (length in)))
         (dolist (e in)
-          (insert (format "    %s <- %s\n"
-                          (format "%s" (plist-get e :type))
-                          (format "%s" (plist-get e :from)))))))))
+          (let* ((type (format "%s" (plist-get e :type)))
+                 (from (format "%s" (plist-get e :from))))
+            (insert (format "    %s <- " type))
+            (let ((p1 (point)))
+              (insert from)
+              (add-text-properties
+               p1 (point)
+               (list 'atlas-edge-target from
+                     'atlas-root (file-name-as-directory (expand-file-name root))
+                     'mouse-face 'highlight
+                     'help-echo (format "Jump to %s" from))))
+            (insert "\n")))))))
 
 (defun atlas-entity-tree--insert-plan (root)
   "Insert 'plan view for ROOT using atlas-plan-context."
@@ -395,7 +506,7 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
     (insert (format "Files (%d):\n" (length (or files '()))))
     (dolist (rel (or files '()))
       (let ((lstart (point)))
-        (insert (format "- %s\n" rel))
+        (insert (format "- %s %s\n" (or (atlas-entity-tree--icon 'file rel) "") rel))
         (add-text-properties
          lstart (line-end-position 0)
          (list 'atlas-root (file-name-as-directory (expand-file-name root))
@@ -562,18 +673,41 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
 
 ;;;###autoload
 (defun atlas-entity-tree-open-at-point ()
-  "Open entity at point (file for now) using text properties."
+  "Open entity or edge target at point using text properties.
+If on an edge target, jump accordingly; otherwise open file at position."
   (interactive)
   (let* ((pos (point))
+         (edge (or (get-text-property pos 'atlas-edge-target)
+                   (and (> pos (point-min)) (get-text-property (1- pos) 'atlas-edge-target))))
+         (root (or (get-text-property pos 'atlas-root)
+                   (and (> pos (point-min)) (get-text-property (1- pos) 'atlas-root))
+                   atlas-entity-tree--root))
          (rel  (or (get-text-property pos 'atlas-rel)
                    (and (> pos (point-min)) (get-text-property (1- pos) 'atlas-rel))))
-         (root (or (get-text-property pos 'atlas-root)
-                   (and (> pos (point-min)) (get-text-property (1- pos) 'atlas-root))))
          (beg  (or (get-text-property pos 'atlas-beg)
                    (and (> pos (point-min)) (get-text-property (1- pos) 'atlas-beg)))))
-    (if (and root rel)
-        (atlas-entity-tree--open-file root rel beg)
-      (message "No openable item at point"))))
+    (cond
+     (edge
+      (cond
+       ((and (stringp edge) (string-prefix-p "feature:" edge))
+        (setq-local atlas-entity-tree--view 'edges)
+        (setq-local atlas-entity-tree--edges-selector edge)
+        (atlas-entity-tree-refresh))
+       ((and (stringp edge) (string-match-p "\\.el\\'" edge))
+        (atlas-entity-tree--open-file root edge 1))
+       ((stringp edge)
+        (let* ((state (atlas-entity-tree--state (or root atlas-entity-tree--root)))
+               (sym (and state (atlas-model-get-symbol state edge)))
+               (srel (and sym (plist-get sym :file)))
+               (sbeg (and sym (plist-get sym :beg))))
+          (if (and srel)
+              (atlas-entity-tree--open-file (or root atlas-entity-tree--root) srel sbeg)
+            (message "Unknown edge target: %s" edge))))
+       (t (message "No openable edge at point"))))
+     ((and root rel)
+      (atlas-entity-tree--open-file root rel beg))
+     (t
+      (message "No openable item at point")))))
 
 ;;;###autoload
 (defun atlas-entity-tree-peek-at-point ()
@@ -783,6 +917,7 @@ Otherwise, fallback to a simple completing-read menu."
     (define-key map (kbd "RET") #'atlas-entity-tree-open-at-point)
     (define-key map (kbd "o")   #'atlas-entity-tree-open-at-point)
     (define-key map (kbd "p")   #'atlas-entity-tree-peek-at-point)
+    (define-key map (kbd "d")   #'atlas-entity-tree-toggle-docstring-at-point)
     (define-key map (kbd "i")   #'atlas-entity-tree-toggle-follow)
     (define-key map (kbd "a")   #'atlas-entity-tree-actions)
     ;; quick commands for views
@@ -890,6 +1025,81 @@ Optional K and BUDGET override defaults for the view."
 Replaces legacy =atlas-entities' UI with the new entity-centric tree."
   (interactive)
   (atlas-entity-tree (or root default-directory)))
+
+;; Docstring helpers and toggle
+
+(defun atlas-entity-tree--truncate-doc (s)
+  "Truncate docstring S to =atlas-entity-tree-doc-max-lines' lines and add ellipsis."
+  (let* ((max-lines (or (and (boundp 'atlas-entity-tree-doc-max-lines) atlas-entity-tree-doc-max-lines) 12))
+         (ellipsis (or (and (boundp 'atlas-entity-tree-doc-ellipsis) atlas-entity-tree-doc-ellipsis) "…"))
+         (lines (and (stringp s) (split-string (or s "") "\n"))))
+    (if (and lines (> (length lines) max-lines))
+        (string-join (append (cl-subseq lines 0 max-lines) (list ellipsis)) "\n")
+      (or s ""))))
+
+(defun atlas-entity-tree--symbol-docstring (root rel beg)
+  "Extract full docstring for def/ at BEG in REL under ROOT, or nil."
+  (condition-case _
+      (let* ((abs (expand-file-name rel (file-name-as-directory root))))
+        (when (file-exists-p abs)
+          (with-temp-buffer
+            (insert-file-contents abs)
+            (goto-char (min (max 1 (or beg 1)) (point-max)))
+            (let ((form (read (current-buffer))))
+              (when (consp form)
+                (cond
+                 ((memq (car form) '(defun defmacro))
+                  (let ((maybe (nth 3 form)))
+                    (and (stringp maybe) maybe)))
+                 ((memq (car form) '(defvar defcustom defconst))
+                  (seq-find #'stringp (cdr form)))
+                 (t nil)))))))
+    (error nil)))
+
+;;;###autoload
+(defun atlas-entity-tree-toggle-docstring-at-point ()
+  "Toggle inline docstring overlay for the symbol at point."
+  (interactive)
+  (let* ((pos (point))
+         (root (or (get-text-property pos 'atlas-root)
+                   (and (> pos (point-min)) (get-text-property (1- pos) 'atlas-root))
+                   atlas-entity-tree--root))
+         (rel  (or (get-text-property pos 'atlas-rel)
+                   (and (> pos (point-min)) (get-text-property (1- pos) 'atlas-rel))))
+         (beg  (or (get-text-property pos 'atlas-beg)
+                   (and (> pos (point-min)) (get-text-property (1- pos) 'atlas-beg))))
+         (eol (line-end-position))
+         (ov (seq-find (lambda (o) (overlay-get o 'atlas-doc))
+                       (append (overlays-at eol)
+                               (and (> eol (point-min)) (overlays-at (1- eol)))))))
+    (cond
+     (ov
+      (delete-overlay ov)
+      (message "Docstring hidden"))
+     ((and root rel beg)
+      (let* ((key (cons rel beg))
+             (doc (or (and (hash-table-p atlas-entity-tree--doc-cache)
+                           (gethash key atlas-entity-tree--doc-cache))
+                      (let ((d (atlas-entity-tree--symbol-docstring root rel beg)))
+                        (when (and (hash-table-p atlas-entity-tree--doc-cache) key)
+                          (puthash key d atlas-entity-tree--doc-cache))
+                        d)))
+             (doc (atlas-entity-tree--truncate-doc (or doc "")))
+             (indent (save-excursion
+                       (back-to-indentation)
+                       (make-string (+ (current-column) 2) ?\s)))
+             (render
+              (concat "\n"
+                      (mapconcat (lambda (line)
+                                   (concat indent line))
+                                 (and (stringp doc) (split-string doc "\n" t))
+                                 "\n"))))
+        (let ((ov2 (make-overlay eol eol)))
+          (overlay-put ov2 'after-string (propertize render 'face 'font-lock-doc-face))
+          (overlay-put ov2 'atlas-doc t))
+        (message "Docstring shown")))
+     (t
+      (message "No symbol with doc at point")))))
 
 (provide 'atlas-entity-tree)
 

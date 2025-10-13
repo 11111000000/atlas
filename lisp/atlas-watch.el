@@ -37,7 +37,7 @@ Default targets Emacs Lisp; set to a broader or language-specific pattern when a
 
 (defun atlas-watch-start (root)
   "Start watching ROOT directory."
-  (let* ((root (file-name-as-directory (expand-file-name root))))
+  (let* ((root (atlas--project-root root)))
     (unless (gethash root atlas-watch--watches)
       (when (and (fboundp 'file-notify-add-watch)
                  (file-directory-p root))
