@@ -7,6 +7,9 @@ title: Atlas — Universal Project Map for Emacs
 * What is Atlas?
 Atlas is a universal, extensible project map for Emacs. It inventories files, extracts symbols (functions, classes, variables, …), connects them with typed edges (import/require/provide/call/ref/…), and keeps everything in a deterministic store you can query, visualize, and export for LLM work.
 
+#+caption: Atlas entities view
+[[./atlas.png]]
+
 - Clean core + thin ports: pure data modeling and transforms; effects live at the edges.
 - Deterministic outputs: stable IDs and ordering for reproducible diffs and CI artifacts.
 - Extensible enrichment: additional facts (entrypoints, roles, types, metrics) with provenance, confidence, and TTLs.
