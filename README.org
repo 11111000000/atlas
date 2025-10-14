@@ -1,334 +1,309 @@
-#+title: Atlas — Universal Project Map for Emacs
-#+author: Peter Kosov <11111000000@email.com>
+title: Atlas — Universal Project Map for Emacs
+#+author: Atlas Authors
 #+language: en
 #+options: toc:2 num:nil
 #+startup: show2levels
 
-* Overview
-Atlas is a universal, extensible project map for Emacs. It builds and uses a structured map of your project: file inventory, symbols, dependencies, fast lexical retrieval, and budget-aware context planning for tasks and LLMs. v1 focuses on Emacs Lisp, with a design and schemas ready to grow to polyglot repositories.
+* What is Atlas?
+Atlas is a universal, extensible project map for Emacs. It inventories files, extracts symbols (functions, classes, variables, …), connects them with typed edges (import/require/provide/call/ref/…), and keeps everything in a deterministic store you can query, visualize, and export for LLM work.
 
-* Highlights (v1, Emacs Lisp first)
-- Build a map (L0 files, L1 symbols, L2 require/provide edges)
-- Incremental, deterministic indexing with TTL and change detection
-- Simple, fast lexical search powered by a lazy in-memory inverted index
-- Context planning: minimal spans around definitions under a token budget
-- Exports: subgraphs to DOT/Mermaid; JSON pack for LLMs; APM v2 text
-- Async indexing, watch-mode, progress indicator, event bus
-- Storage: stable, versioned S-expressions under .context/atlas/v1/
+- Clean core + thin ports: pure data modeling and transforms; effects live at the edges.
+- Deterministic outputs: stable IDs and ordering for reproducible diffs and CI artifacts.
+- Extensible enrichment: additional facts (entrypoints, roles, types, metrics) with provenance, confidence, and TTLs.
+- LLM-first exports: a compact textual Atlas Prompt Map (APM v2) and an interoperable “LLM pack”.
 
-* Design for growth
-- Clean core + thin ports: pure data modeling and transforms; effects at edges
-- Stable alist schemas, versioned on-disk format; deterministic outputs
-- Pluggable providers (Elisp today; Treesit/LSP/external CLI later)
-- Facts enrichment layer (optional): provenance, confidence, TTL
+Atlas works entirely locally and offline by default. Your code never leaves the machine unless you explicitly export it.
 
-- Requirements
-- Emacs 27.1 or newer
-- Optional: elisp-refs (reserved for deeper call/ref; off by default)
-- Optional: transient (actions menu in Atlas Entities)
-- Optional: all-the-icons (icons in entity tree)
-- Optional: posframe (peek backend in some setups)
-- No external services; fully offline by default
+** Highlights
+- Files, symbols, edges, summaries, facts — normalized IR with stable IDs.
+- Persistent store under .context/atlas/v1/ inside each project.
+- In-memory indexes and lexical search with an inverted index.
+- A simple context planner for building token-budgeted context groups.
+- Minimal UI: progress modeline and an Entity Tree buffer (text-only, TTY-friendly).
+- Exports: Graph (DOT/Mermaid), APM v2 (text), and an LLM pack (S-exp/JSON).
 
-- Installation
-* Local clone (simplest)
-#+begin_src emacs-lisp
-(add-to-list 'load-path (expand-file-name "lisp" "~/Code/atlas"))
-(require 'atlas)      ;; core/entrypoint
-;; Optional UI and exports:
-(require 'atlas-ui)
-(require 'atlas-export)
-(require 'atlas-explore)
-#+end_src
+** Status
+- Emacs: 27.1+ (tested with recent Emacs; Emacs 29+ recommended for package-vc workflows).
+- Providers: Built-in Elisp provider (L0–L2). Treesitter/LSP/external providers are specified and will incrementally land.
 
-* use-package (lazy-load)
+* Why Atlas?
+Large or multi-language repos need an always-fresh map you can search, traverse, and export — without running heavyweight IDEs or proprietary servers.
+
+- Deterministic store: Repeatable builds and diffable artifacts.
+- Extensible: Facts let you add value (entrypoints, types, roles) without breaking schemas.
+- LLM-oriented: Export human-readable APM and compact “LLM packs” under token budgets.
+- Emacs-first: Snappy, text-only UI that works everywhere (even over SSH).
+
+* Installation (use-package)
+Below are two practical ways to load Atlas via use-package. Pick one.
+
+** Option A: Local checkout (recommended for development)
+- Clone the repo and point :load-path at the lisp directory. Load autoloads only; enable UI if you like.
+
 #+begin_src emacs-lisp
 (use-package atlas
-  :load-path (lambda () (expand-file-name "lisp" "~/Code/atlas")))
+  :load-path "/path/to/atlas/lisp"
+  :commands (atlas-open atlas-close
+             atlas-index atlas-reindex-changed atlas-stats
+             atlas-query-command
+             atlas-entity-tree atlas-entities
+             atlas-explore
+             atlas-progress-mode
+             atlas-watch-mode atlas-watch-add-root atlas-watch-remove-root atlas-watch-list-roots
+             atlas-graph-export-command atlas-export-llm-command atlas-export-apm-v2-command atlas-export-llm-pack-command
+             atlas-log-open atlas-log-clear)
+  :init
+  ;; Load autoload stubs; does not pull heavy modules until called.
+  (require 'atlas-autoloads)
+  ;; Optional: turn on modeline progress globally
+  ;; (atlas-progress-mode 1)
+  )
 #+end_src
 
-* Quick enable for local development
-- Load helper and enable progress/watch:
+- Convenience setup (optional):
+  - You can load atlas-setup.el to add the lisp path and autoloads in one go.
+  - Then enable defaults with atlas-setup-enable.
+
 #+begin_src emacs-lisp
-(load (expand-file-name "lisp/atlas-setup.el" "~/Code/atlas"))
-(atlas-setup-enable)                     ;; turn on progress UI
-;; (atlas-setup-enable "~/Code/atlas/")  ;; also add a root to watch
+(load "/path/to/atlas/lisp/atlas-setup.el")
+;; Turn on progress UI and optionally start watching a root
+;; (atlas-setup-enable)                      ; UI only
+;; (atlas-setup-enable "/path/to/project/")  ; UI + watch this project
 #+end_src
 
-- Quick Start
-* Open, index, and inspect
+** Option B: Emacs 29+ with package-vc (pull directly from Git)
+- If your use-package supports :vc (Emacs 29+), you can source Atlas directly.
+
 #+begin_src emacs-lisp
-(let ((root default-directory))
-  (atlas-open root)
-  (atlas-index root t)   ;; full rebuild; with prefix: C-u M-x atlas-index
-  (atlas-stats root))    ;; => (:files N :symbols M :edges K :t-indexed SEC :schema 1)
+(use-package atlas
+  :vc (:url "https://github.com/11111000000/atlas.git"
+       :rev :newest
+       :lisp-dir "lisp")
+  :commands (atlas-index atlas-entity-tree atlas-progress-mode)
+  :init
+  (require 'atlas-autoloads))
 #+end_src
 
-* Query and jump
-#+begin_src emacs-lisp
-(let* ((res (atlas-query default-directory "defcustom theme" :k 10))
-       (first (car res)))
-  (when first
-    (message "First result: %S" first)))
-;; Interactive: M-x atlas-query-command
-#+end_src
+- If your setup uses straight.el/quelpa/elpa mirrors, adapt accordingly by pointing to the lisp/ dir and requiring atlas-autoloads.
 
-* Explore buffer (clickable)
-#+begin_src emacs-lisp
-(atlas-explore default-directory "completion table" 20)
-;; RET or [Open] to jump to file/position
-#+end_src
+* Quickstart
+** Index your current project
+- Open a project (Atlas will detect root via project.el/VC/.context):
+  - M-x atlas-index
+  - This builds the store under <root>/.context/atlas/v1/ and in-memory indexes.
 
-* Plan a minimal context (LLM-friendly)
-#+begin_src emacs-lisp
-(atlas-plan-context default-directory "how to configure theme defaults?"
-                    :k 12 :budget 1200 :model 'brief)
-;; => (:files ... :spans ... :rationale ... :est-tokens ... :items ...)
-#+end_src
+** Explore entities
+- Open the Entity Tree (text-only UI):
+  - M-x atlas-entity-tree
+  - Keys (inside the tree buffer):
+    - g: refresh
+    - RET/o: open item
+    - v: peek (side window preview)
+    - d: toggle inline docstring
+    - TAB: fold/unfold at heading
+    - n/j and p/k: next/previous heading
+    - s: search view
+    - E: edges view
+    - P: plan view
+    - i: toggle follow-mode (auto-peek as you move)
+    - a: actions menu (uses transient if available)
 
-* Export a graph (DOT / Mermaid)
-#+begin_src emacs-lisp
-(atlas-graph-export default-directory
-                    '("lisp/foo.el" "feature:foo-core")
-                    :depth 1 :format 'dot :path "/tmp/atlas.dot")
-;; Interactive: M-x atlas-graph-export-command
-#+end_src
+** Run a quick search
+- M-x atlas-query-command — enter a query, get top-k matches.
 
-* Export packs for LLMs
-#+begin_src emacs-lisp
-;; JSON pack
-(atlas-export-llm default-directory "find defun foo"
-                  :k 12 :graph-depth 1 :path "/tmp/atlas-llm.json")
-;; S-expression pack (interoperable, primary)
-(atlas-export-llm-pack default-directory "find defun foo"
-                       :k 12 :graph-depth 1 :path "/tmp/atlas-llm.sexp")
-;; APM v2 textual export
-(atlas-export-apm-v2 default-directory :path "/tmp/atlas.apm.txt")
-#+end_src
+** Export a graph
+- M-x atlas-graph-export-command — choose selector (file path, symbol id, or feature:NAME), depth, and output DOT/Mermaid.
 
-* Watch for changes and show progress
-#+begin_src emacs-lisp
-;; Watch current project (global minor-mode toggles current default-directory)
-(atlas-watch-mode 1)
-;; Or manage multiple roots:
-(atlas-watch-add-root default-directory)
-(atlas-watch-list-roots)
-;; Mode-line progress:
-(require 'atlas-ui)
-(atlas-progress-mode 1)
-#+end_src
+** Export for LLMs
+- APM v2 (text): M-x atlas-export-apm-v2-command
+- LLM pack (S-exp): M-x atlas-export-llm-pack-command
+- LLM pack (JSON): M-x atlas-export-llm-command
 
-- Concepts and Data
-* IR (v1, Emacs Lisp)
-- Files: (:path REL :size INT :mtime FLOAT :hash STR|nil :lang elisp :flags plist)
-- Symbols: (:id STR :file REL :name STR :kind SYM :beg INT :end INT
-             :sig STR|nil :doc1 STR|nil :exported? BOOL :source 'elisp :lang 'elisp)
-- Edges: (:type SYM|STR :from KEY :to KEY :weight FLOAT|nil :source SYM)
-- Summaries: optional, append-only (file/symbol commentary)
-- Facts: optional enrichment with provenance/priority (advanced)
+** See progress in the modeline
+- M-x atlas-progress-mode — shows “Atlas: f=X s=Y e=Z” while indexing.
 
-* Identity and keys
-- Stable symbol id: LANG:REL#NAME@BEG-END/KIND (v1: LANG=elisp; KIND as string)
-- Edge keys: file REL, symbol id, or typed virtual keys ("feature:NAME", …)
+** Watch for changes (auto re-index changed files)
+- M-x atlas-watch-mode (global) — watches the current directory.
+- Or add/remove roots:
+  - M-x atlas-watch-add-root
+  - M-x atlas-watch-remove-root
+  - M-x atlas-watch-list-roots
 
-* On-disk layout (versioned)
-- Root: <project>/.context/atlas/v1/
-- Files:
-  - meta.sexp — (:schema INT :project-root STR :generated-at FLOAT :counts plist :languages list :opts plist)
-  - files.sexp — list of File plists
-  - symbols.sexp — list of Symbol plists
-  - edges.sexp — list of Edge plists
-  - summaries.sexp — optional summaries
-  - facts.sexp — optional enrichment
+* Concepts
+** Core IR
+- File: inventory item.
+- Symbol: top-level program entity (function, class, var, …) with a stable :id.
+- Edge: typed relation between entities (require/provide/import/export/call/ref/…).
+- Summary: text snippet bound to a file or symbol (optional).
+- Fact: enrichment assertion with provenance and confidence (optional).
 
-- Usage
-* Lifecycle
-- (atlas-open ROOT), (atlas-close ROOT), (atlas-state ROOT), (atlas-root-dir ROOT)
-- (atlas-stats ROOT) → (:files N :symbols M :edges K :facts F :summaries S :t-indexed SEC :schema INT)
+** Stable IDs
+- Format: LANG:REL#NAME@BEG-END/KIND
+- Deterministic within a file as long as source spans don’t change.
 
-* Indexing
-- (atlas-index ROOT &optional FULL-OR-CHANGED)
-  - t → full rebuild
-  - list-of-paths → changed-only
-  - nil → TTL policy: full if stale, else changed-only
-- (atlas-reindex-changed ROOT) — convenience for TTL policy
-- (atlas-index-async ROOT &key changed emit done) → (:token :cancel)
-- (atlas-update ROOT PATHS) — changed-only run for PATHS
+** Store layout (on disk)
+- <root>/.context/atlas/v1/
+- files.sexp, symbols.sexp, edges.sexp, summaries.sexp (optional), facts.sexp (optional), meta.sexp
+- Compression: .sexp or .sexp.gz (transparent via jka-compr).
 
-* Query and plan
-- (atlas-query ROOT KEYWORDS &key k kinds filters)
-  - Return list of (:type 'symbol :id :score :file :range :name :sig :doc1)
-- (atlas-plan-context ROOT QUERY &key k budget model)
-  - Return (:files :spans :docs :rationale :est-tokens :items)
+** In-memory model and search
+- Hash indexes for files/symbols/edges, plus an inverted index for lexical search.
+- Tokenization:
+  - Default: ASCII [a-z0-9_]+ (lowercased).
+  - Optional: Unicode-aware (NFKC + [[:word:]]+) with optional CamelCase splitting.
 
-* Explorer buffer
-- (atlas-explore ROOT QUERY &optional k)
-  - Clickable results; RET/o to open at position
+** Events and UI
+- Topics: :atlas-index-start, :atlas-index-progress, :atlas-index-done, :atlas-index-error.
+- UI throttles to avoid churn; handlers are exception-safe.
 
-* Entity-centric tree (Atlas Entities)
-- Open:
-#+begin_src emacs-lisp
-(let ((root default-directory))
-  (atlas-open root)
-  (atlas-entity-tree root))       ;; opens buffer "*Atlas Entities*"
-;; Alias: (atlas-entities)
-#+end_src
-- Views
-  - by-feature (default): Features → provider file → symbols
-  - by-kind: Symbols grouped by kind (Function/Macro/Var/Custom/Const/Symbol)
-  - search: “Search: <query>” results with local In/Out edge context
-  - imports: Imports/Provides overview (alias of by-feature with heading)
-  - edges: local neighborhood around selector (REL | feature:NAME | symbol id)
-  - plan: “Plan: <query>, budget=N” — files and spans from atlas-plan-context
-- Commands
-  - atlas-entity-tree ROOT — open/reveal the tree for ROOT
-  - atlas-entity-tree-set-view VIEW — switch view (by-feature|by-kind|search|imports|edges|plan)
-  - atlas-entity-tree-search ROOT QUERY [K]
-  - atlas-entity-tree-edges ROOT SELECTOR [DEPTH]
-  - atlas-entity-tree-plan ROOT QUERY [K BUDGET]
-- Key bindings (inside Atlas Entities buffer)
-  - g       refresh
-  - RET / o open item
-  - v       peek item (side window preview)
-  - d       toggle inline docstring at point
-  - TAB     toggle fold at heading
-  - n/j     next heading
-  - p/k     previous heading
-  - s       open Search view (prompt)
-  - E       open Edges view (prompt)
-  - P       open Plan view (prompt)
-  - i       toggle follow-mode (auto-peek as point moves)
-  - a       actions menu (transient if available; Open/Peek/Copy/Search/Edges/Plan)
-- Behavior
-  - Reacts to indexing events (:atlas-index-start/progress/done/error)
-  - Deterministic ordering; text-first rendering; optional icons
-  - No disk I/O in UI; reads from in-memory model
+** Security and privacy
+- Offline by default; no code leaves your machine unless you export it yourself.
+- Store and logs remain local to the project.
+
+* Usage patterns
+** Typical workflow
+- Index once (full), then run changed-only re-indexes automatically via watch mode or manually on demand.
+- Search and jump by name/sig/file tokens; plan a context with 1-hop expansion.
+- Export a compact prompt map or a machine-friendly LLM pack for downstream tools.
+
+** Commands you’ll likely use daily
+- atlas-index — full or changed-only depending on TTL and change detection.
+- atlas-entity-tree — quick, text-only navigator of features/files/symbols.
+- atlas-query-command — quick lexical search for symbols.
+- atlas-progress-mode — light modeline indicator for long runs.
+
+** Exports you can rely on
+- Graph (DOT/Mermaid): share a small subgraph in docs/PRs.
+- APM v2 (text): compact, human-readable lines optimized for LLM prompts.
+- LLM pack (S-exp/JSON): interoperable bundle for external tooling.
+
+* Configuration
+** Indexing and store
+- atlas-index-ttl — seconds before a run is considered stale (default: 600).
+- atlas-exclude-dirs — directory regexps to skip (e.g., node_modules, build, vendor, .context).
+- atlas-max-file-size — deep-parse cap; large files degrade gracefully.
+- atlas-hash-content — compute content hashes for small files to improve change detection.
+- atlas-store-compressed — write .sexp.gz to shrink the store.
+- atlas-segment-threshold — future-facing segmentation hint (kept in meta opts).
+
+** Tokenization
+- atlas-unicode-tokens — enable Unicode-aware tokenization (NFKC + [[:word:]]+).
+- atlas-tokenize-camelcase — add CamelCase sub-tokens (keeps original token too).
+
+** Planner
+- atlas-plan-default-budget — default token budget.
+- atlas-plan-model — plan “brief” vs “rich” (extensible).
+
+** Elisp provider knobs
+- atlas-elisp-use-elisp-refs — optional call/ref enrichment (not enabled by default).
+- atlas-elisp-refs-max-size — size cap for elisp-refs.
+
+** UI and watch
+- atlas-ui-progress-throttle — mode-line update throttle (seconds).
+- atlas-entity-tree-* — view defaults, icons, docstring limits, graph depth, search k.
+- atlas-watch-file-regexp — which files to watch (default “\\.el\\'”).
+
+* Provider model
+** Built-in today
+- Elisp provider: L0 inventory, L1 symbols (defun/defmacro/defvar/defcustom/defconst), L2 require/provide edges; adds Commentary as file summaries.
+
+** Extending beyond Elisp
+- Treesitter providers (generic) and LSP/CLI providers (advanced) are specified:
+  - Precise imports/exports/types; limited call/ref graphs under caps.
+  - Deterministic batches with sorted edges and stable symbol ordering.
+  - Clear :source for provenance (treesit|lsp|cli|heuristic).
 
 * Exports
-- Graphs
-  - (atlas-graph ROOT SELECTOR &key depth edge-types) → (:nodes :edges)
-  - (atlas-graph-export ROOT SELECTOR &key depth edge-types format path)
-  - Interactive: atlas-graph-export-command
-- LLM packs
-  - JSON: (atlas-export-llm ROOT QUERY &key k budget graph-depth path)
-  - SEXP: (atlas-export-llm-pack ROOT QUERY &key k budget graph-depth path)
-  - Interactive: atlas-export-llm-command, atlas-export-llm-pack-command
-- APM v2 (textual)
-  - (atlas-export-apm-v2 ROOT &key sections budget path)
-  - Interactive: atlas-export-apm-v2-command
+** Graph (DOT/Mermaid)
+- Input: selector (file REL | symbol-id | feature:NAME | list), depth, optional edge-type filter.
+- Output: stable node/edge ordering; labels escaped.
+- Commands:
+  - atlas-graph-export-command (interactive)
+  - atlas-graph (programmatic API)
 
-* Events and progress UI
-- Bus API:
-  - (atlas-events-subscribe TOPIC FN), (atlas-events-unsubscribe TOPIC FN)
-  - Topics:
-    - :atlas-index-start — args: :root STR :full t|nil
-    - :atlas-index-progress — args: :files INT :symbols INT :edges INT
-    - :atlas-index-done — args: :root STR :counts PLIST
-    - :atlas-index-error — args: :root STR :reason SYMBOL
-- Mode-line indicator:
-  - (atlas-progress-mode 1) — compact “Atlas: f=X s=Y e=Z” or “Atlas: indexing…”
+** APM v2 (text)
+- Sections: Project header, Modules overview, API surface, Edges, Entrypoints, Enrichment facts, Notes/TODOs.
+- Deterministic lines suitable for prompts and diffs.
+- Command:
+  - atlas-export-apm-v2-command
 
-* Watch mode
-- Global minor-mode using file-notify (when available)
-  - (atlas-watch-mode) — toggle for current default-directory
-  - (atlas-watch-add-root ROOT), (atlas-watch-remove-root ROOT), (atlas-watch-list-roots)
-  - Triggers changed-only indexing for files matching atlas-watch-file-regexp (default "\\.el\\'")
+** LLM pack (S-exp/JSON)
+- Brief bundle: query, top hits, files/spans, small graph, estimated tokens, rationale.
+- Commands:
+  - atlas-export-llm-pack-command (S-exp)
+  - atlas-export-llm-command (JSON)
 
-- Configuration
-* Indexing and store
-- atlas-index-ttl (float): TTL for stale detection
-- atlas-exclude-dirs (list of regexps): directories to skip
-- atlas-max-file-size (int): limit deep parsing on large files
-- atlas-hash-content (bool): compute sha256 for precise change detection
-- atlas-store-compressed (bool): write .sexp.gz files
-- atlas-segment-threshold (int): reserved for future segmentation
+* Tips and recipes
+** Keep it fast
+- Exclude vendor/build dirs; enable atlas-hash-content for small files.
+- Use watch mode to continuously pick up changes; debounce and TTL keep churn low.
 
-* Quality/balance
-- atlas-elisp-use-elisp-refs (bool), atlas-elisp-refs-max-size (int): reserved for deeper call/ref
-- atlas-debounce-interval (float): debounce async tasks
-- atlas-parallel-limit (int): reserved for provider-level concurrency
+** Build a context quickly
+- M-x atlas-entity-tree → P (plan view) → enter a query → get budgeted spans with 1-hop deps via require→provide.
 
-* Planning
-- atlas-plan-default-budget (int), atlas-plan-model (symbol)
+** Share a dependency slice
+- atlas-graph-export-command → choose a feature file and depth=1 → attach DOT/Mermaid to PRs or docs.
 
-* UI/Watch
-- atlas-ui-progress-throttle (float)
-- atlas-watch-file-regexp (regexp) — default "\\.el\\'"
+* Troubleshooting
+** “No providers registered”
+- The Elisp provider registers automatically when needed. If you see this once (e.g., minimal setups), explicitly require it:
+  - (require 'atlas-source-elisp)
 
-* Tokenization (search)
-- atlas-unicode-tokens (bool): enable Unicode-aware tokens (NFKC + [[:word:]]+)
-- atlas-tokenize-camelcase (bool): split CamelCase into additional tokens (when Unicode tokens enabled)
+** “Nothing changed”
+- Atlas tracks mtime/size (and hash if enabled). If a run reports up-to-date but you expect changes, check:
+  - Project root detection (M-x atlas-open to verify)
+  - Exclude patterns (atlas-exclude-dirs)
+  - File size caps (atlas-max-file-size)
 
-- Performance Tips
-- Exclude common vendor/build dirs via atlas-exclude-dirs
-- Keep atlas-elisp-use-elisp-refs off unless deeper edges are needed
-- Use (atlas-index-async ...) and watch-mode to avoid UI stalls
-- Prefer compressed store (.sexp.gz) for CI artifacts; avoid compressing during hot loops
+** “Entity Tree is empty or stale”
+- Press g to refresh; enable auto-refresh on index events (default).
+- Ensure you indexed first: M-x atlas-index.
 
-- Privacy and Offline
-- No network calls; everything runs locally
-- Stores live under .context/atlas/v1
-- Logs and exports are explicit; nothing leaves your machine unless you share outputs
+* Development
+** Local dev loop
+- Add lisp/ to load-path and require atlas-autoloads (or load atlas-setup.el).
+- Enable atlas-log for visibility (defaults to enabled).
+- Inspect logs: M-x atlas-log-open.
 
-- Troubleshooting
-- “No providers registered”: Require the Elisp provider
-  - (require 'atlas-source-elisp) or ensure atlas is loaded normally (it auto-registers)
-- Index seems stale: Force full rebuild
-  - (atlas-index default-directory t)
-- Nothing happens on watch: Verify file-notify availability and atlas-watch-file-regexp
-- UI not updating: Ensure atlas-progress-mode is enabled; check atlas-log buffer
+** Contributing
+- Start with the v1 SPEC under spec/v1/ for schemas, storage, providers, enrichment, and exports.
+- Keep outputs deterministic and schema types stable.
+- Prefer additive changes (new optional fields/predicates); document migrations if needed.
 
-- FAQ
-- Does Atlas send my code anywhere?
-  - No. Atlas is offline by default; all data stays on your machine.
-- Can I use Atlas without lore/context-navigator?
-  - Yes. Atlas is a standalone library with interactive commands.
-- Can I add other languages?
-  - Yes. Add/register a provider that emits normalized files/symbols/edges; core schemas are language-agnostic.
-- How stable are outputs?
-  - Deterministic ordering and stable IDs are design goals; unchanged inputs produce unchanged outputs.
+* References
+** SPEC (v1)
+- IR: spec/v1/10-ir/*
+- Storage: spec/v1/20-storage/*
+- Model: spec/v1/30-model/*
+- Providers: spec/v1/40-providers/*
+- Enrichment: spec/v1/50-enrichment/*
+- Exports: spec/v1/60-exports/*
+- Conformance: spec/v1/90-conformance/*
 
-- Development and Tests
-* Nix (flakes)
-#+begin_src shell
-nix run .#tests
-# or
-nix flake check -L
-#+end_src
+** Example fixtures
+- Minimal and multi-language fixtures in spec/v1/examples/* illustrate store contents, edges, facts, and APM text.
 
-* Vanilla Emacs
-#+begin_src shell
-emacs -Q --batch -L lisp -l test/ert-runner.el
-#+end_src
+* License
+- See the LICENSE file in the repository.
 
-* Logging
-- Open/Clear: (atlas-log-open), (atlas-log-clear)
-- Config: atlas-log-enabled, atlas-log-level, atlas-log-max-lines
+* FAQ
+** Does Atlas send my code anywhere?
+- No. Atlas is offline by default. Only you can export artifacts, and they remain local unless you share them.
 
-* Dump/Import (developer tooling)
-#+begin_src emacs-lisp
-(require 'atlas-dump)
-;; Dump entire store to sexp
-(atlas-dump default-directory 'all :format 'sexp :path "/tmp/atlas.sexp")
-;; Import a batch (alist)
-(atlas-import default-directory '((symbols . ...) (edges . ...) (:file . "lisp/foo.el")))
-#+end_src
+** Can I use it over SSH/TTY?
+- Yes. The UI is text-only and works in TTY. No icon fonts are required (optional if available).
 
-- Roadmap
-* v1 (Elisp)
-- Storage, indexing (TTL/changed-only), lexical search, planning, events, watch, explorer, DOT/Mermaid, LLM JSON/SEXP, APM v2
-* v2 (polyglot)
-- Treesit/LSP/external CLI providers; broader edge vocabulary (call/ref/import/…); optional segmentation
-* v3
-- Summaries pipeline, richer ranking/visualization, web viewer
+** Will there be non-Elisp providers?
+- Yes. Treesitter, LSP, and external CLI providers are defined by the SPEC and will land incrementally. Consumers must tolerate unknown edge types and virtual prefixes by design.
 
-- License
-- GNU Lesser General Public License v2.1 or later (LGPL-2.1+). See LICENSE.
+** How stable is the format?
+- v1 requires type stability for existing keys; additions are optional. Non-additive changes would bump the schema with documented migrations.
 
-- Links
-- Spec index: spec/v1/spec-index.sexp, link-map.sexp
-- Docs: spec/v1/*.org (IR core, storage, model, providers, enrichment, exports, UI, conformance)
-- Core modules: lisp/atlas/.el
-- CI: GitHub Actions (flake-based ERT)
+### 
 
-*** 
+
+;; Local Variables:
+;; gptel-model: gpt-5
+;; gptel--backend-name: "AI Tunnel"
+;; gptel--bounds: ((response (1 12756)))
+;; End:
