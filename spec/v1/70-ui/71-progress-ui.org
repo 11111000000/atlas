@@ -1,0 +1,19 @@
+#+title: Progress UI and Events
+#+language: en
+:PROPERTIES:
+:ID: v1-71-progress-ui
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Mode-line progress via events with throttling.
+:END:
+
+* Event topics
+- :atlas-index-start, :atlas-index-progress, :atlas-index-done, :atlas-index-error.
+
+* Modeline segment
+- Text "Atlas: f=X s=Y e=Z" or "Atlas: indexing…"; throttled by atlas-ui-progress-throttle.
+- Global minor-mode atlas-progress-mode adds/removes modeline construct.
+
+* Constraints
+- Handlers must be exception-safe; throttled updates avoid UI churn.

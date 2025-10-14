@@ -1,0 +1,19 @@
+#+title: Tree-sitter Provider (Generic)
+#+language: en
+:PROPERTIES:
+:ID: v1-42-treesit
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Generic TS grammar-based extractor for defs/imports/exports and limited calls/refs.
+:END:
+
+* Levels
+- L0: inventory (by file extension/mode)
+- L1: top-level defs (symbols), docstrings where available
+- L2: imports/exports/reexports
+- L3: limited call/ref extraction with per-file budget
+
+* Requirements
+- Emission MUST produce canonical :kind mappings and :lang tags.
+- Missing grammar MUST degrade to heuristics or skip with clear logging.

@@ -1,0 +1,18 @@
+#+title: Changelog (v1)
+#+language: en
+:PROPERTIES:
+:ID: v1-99-changelog
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: History of changes to the Atlas specification v1.
+:END:
+
+* 2025-10-14
+- Initial v1 spec scaffolded: IR core, storage, model, providers contract, enrichment, exports (APM v2, LLM pack), security, conformance.
+- Added UI docs (entity tree, progress), graph export, performance guidelines.
+- Introduced provider profiles (elisp, LSP) and quality metrics add-on.
+- APM v2 EBNF: KEY now allows '?' (e.g., exported?=t) to match canonical lines.
+- Edges: clarified and generalized typed virtual keys (feature:, module:, symbol:, interface:, typeclass:, enum:); consumers MUST accept unknown prefixes.
+- Meta serialization: :counts MAY include optional :facts and :summaries; readers MUST ignore unknown keys.
+- Scripts: renamed spec index wrapper to spec-index.sh (was scpec-index.sh).

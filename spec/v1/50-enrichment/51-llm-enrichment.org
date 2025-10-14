@@ -1,0 +1,17 @@
+#+title: LLM Enrichment
+#+language: en
+:PROPERTIES:
+:ID: v1-51-llm-enrich
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Ingestion of LLM-derived facts with evidence and safeguards.
+:END:
+
+* Safety (MUST)
+- Mark :source 'llm; include :confidence; prefer ttl.
+- Provide :evidence when possible (text snippet, file, range).
+- Do not overwrite core IR; use facts.
+
+* Fact Types (examples)
+- role, cluster, doc-topic, similar-to, duplicate-of, entrypoint.

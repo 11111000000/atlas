@@ -1,0 +1,27 @@
+#+title: Architecture and Data Flow
+#+language: en
+:PROPERTIES:
+:ID: v1-03-arch
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Layers, lifecycle, and data flow overview.
+:END:
+
+* Layers
+- Sources → Store → Model → Query/Plan → Exports/UI.
+- Sources: Elisp/Tree-sitter/LSP/External CLI produce batches.
+- Store: sexp persistence (files/symbols/edges/summaries/facts, meta).
+- Model: in-memory indexes, inverted index, graph helpers.
+- Query/Plan: lexical retrieval and context planning under token budget.
+- Exports/UI: APM text, JSON pack, DOT/Mermaid, entity tree.
+
+* Lifecycle
+1) Open root; load store and build indexes lazily.
+2) Index: run sources; merge batches; update store and model.
+3) Query/Plan: build top-k, assemble spans/files, 1-hop edges.
+4) Export: serialize to APM or JSON pack.
+
+* Events and Asynchrony
+- Event bus: :atlas-index-start/progress/done/error.
+- Async indexing with debounce and cancel.

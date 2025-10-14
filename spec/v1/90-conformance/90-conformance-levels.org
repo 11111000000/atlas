@@ -1,0 +1,19 @@
+#+title: Conformance Levels
+#+language: en
+:PROPERTIES:
+:ID: v1-90-conformance
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Core / Extended / Advanced levels for providers and exports.
+:END:
+
+* Levels
+- Core: files, symbols (defs), require/provide/import/export; APM header/overview/API; store serialization.
+- Extended: additional edges (call/ref/type), summaries, LLM pack.
+- Advanced: facts enrichment, conflict resolution, entrypoint detection, type info.
+
+* Checklist (per level)
+- Core: pass schema validation, deterministic output on unchanged inputs.
+- Extended: produce and consume additional edges; search/planner integration.
+- Advanced: facts ingestion with priorities; APM enrichment section.

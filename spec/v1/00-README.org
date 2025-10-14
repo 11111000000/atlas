@@ -1,0 +1,55 @@
+#+title: Atlas SPEC — Universal Project Map for Emacs (v1)
+#+author: Atlas Authors
+#+language: en
+#+options: toc:2 num:t
+#+startup: show2levels
+
+:PROPERTIES:
+:ID: v1-00-readme
+:STATUS: Mixed
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:DEPENDS:
+:SUMMARY: Overview, goals, reading guide, versioning, and navigation.
+:END:
+
+* Summary
+Atlas defines a universal, extensible project map (files, symbols, edges, summaries, facts) with a clean core and pluggable sources (Elisp, Tree-sitter, LSP, external CLI). It provides deterministic storage (sexp), in-memory indexes, retrieval and planning for LLM context, and exports (APM v2 text, JSON pack).
+
+* Goals and Scope
+- Provide a language-agnostic IR core that can be enriched without schema breakage.
+- Favor Emacs/Lisp/Haskell-friendly tooling: Org for docs; S-exp for data; Dhall optional; JSON as an interoperability export.
+- Deterministic formats and stable IDs for reproducible pipelines.
+- LLM-oriented exports optimized for token budgets.
+
+* How to read this SPEC
+- Start with 01-glossary and 02-design-principles.
+- Core schema: 10-ir/* (overview, files/symbols/edges/summaries/facts + schemas).
+- Storage: 20-storage/*; In-memory model and search: 30-model/*.
+- Providers: 40-providers/*; Enrichment: 50-enrichment/*.
+- Exports: 60-exports/* (APM v2 text and JSON pack).
+- Conformance and fixtures: 90-conformance/*.
+- Machine indices: spec-index.sexp and link-map.sexp.
+
+* Versioning
+- Schema version keyed via meta :schema (integer).
+- Backward-compatible evolution: add-only or optional fields; type stability required.
+- Migrations documented in 23-migrations.org.
+
+* Deliverables
+- Normative: IR core, storage layout, provider contract, APM v2, conformance levels.
+- Informative: mappings per language, edge taxonomy matrices, performance, UX notes.
+
+* Normative references
+- 10-ir/11-ir-core-files.org
+- 10-ir/12-ir-core-symbols.org
+- 10-ir/13-ir-core-edges.org
+- 10-ir/14-ir-summaries.org
+- 10-ir/15-ir-facts.org
+- 20-storage/20-storage-layout.org
+- 21-store-serialization.org
+- 40-providers/40-providers-contract.org
+- 50-enrichment/50-facts-aggregation.org
+- 51-llm-enrichment.org
+- 60-exports/60-export-apm-v2.org
+- 90-conformance/90-conformance-levels.org

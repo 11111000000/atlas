@@ -1,0 +1,23 @@
+#+title: Performance Guidelines
+#+language: en
+:PROPERTIES:
+:ID: v1-81-performance
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Practical limits and strategies for large repositories.
+:END:
+
+* Indexing
+- Exclude common vendor/build dirs; cap deep parsing by atlas-max-file-size.
+- Incrementality: changed-only detection via size/mtime/hash; TTL policy.
+
+* Providers
+- Stream batches; avoid blocking main thread; cap L3 edges per file and globally.
+- Cache external tool results; degrade to treesit/heuristics when unavailable.
+
+* Store
+- Optional compression (.sexp.gz); stable order to improve diffs; segment thresholds for future versions.
+
+* Query/Plan
+- Keep inverted index in memory; rebuild lazily; estimate tokens by char/4; stop when budget exceeded.

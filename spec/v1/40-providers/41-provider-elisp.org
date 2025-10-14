@@ -1,0 +1,41 @@
+#+title: Elisp Provider Profile
+#+language: en
+:PROPERTIES:
+:ID: v1-41-provider-elisp
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Language profile for the Elisp provider: levels, mappings, emitted entities and edges.
+:END:
+
+* Scope
+- Levels: L0 inventory, L1 symbols, L2 require/provide edges, L3 optional call/ref (elisp-refs).
+- Inputs: .el files under project root; excludes match atlas-exclude-dirs.
+
+* Symbol extraction (L1)
+- Kinds: defun→function, defmacro→macro, defvar→var, defcustom→custom, defconst→const.
+- Fields: :id, :file, :name, :kind, :beg/:end (buffer positions), :sig (truncated header), :doc1 (first doc line), :exported? (nil by default), :source 'elisp, :lang 'elisp.
+- Heuristics:
+  - doc1 for defun/defmacro from 3rd form if string; defvar/defcustom/defconst: first string in tail.
+  - Stable :id format "elisp:REL#NAME@BEG-END/KIND".
+
+* Module deps (L2)
+- Edges:
+  - provide: (:type provide :from REL :to "feature:NAME" :source elisp)
+  - require: (:type require :from REL :to "feature:NAME" :source elisp)
+- Parsing: read forms conservatively; accept (provide 'foo), (require 'foo), and strings.
+
+* Optional enrichment (L3)
+- call/ref (when atlas-elisp-use-elisp-refs=t and file size ≤ atlas-elisp-refs-max-size).
+- autoload: from ;;;###autoload markers as (:type autoload :from REL :to ID).
+- keybind: parse (define-key MAP KEY CMD), (global-set-key KEY CMD) to (:type keybind :from REL :to CMD :weight 1.0).
+- interactive role: functions with (interactive …) → add fact (role command).
+- defcustom: facts with type/default/group when parsed; may emit Option-lines in APM.
+
+* Degradation rules
+- Very large files (> atlas-max-file-size): still L2 scan; L1 may skip deep parsing; positions set 0..0.
+- Read errors: skip offending forms; continue rest of buffer.
+
+* Determinism
+- Emit symbols in file-order (beg ascending); edges are sorted by (type, to).
+- Stable text of :sig and :doc1 (trimmed; no reflow).

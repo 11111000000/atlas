@@ -1,0 +1,14 @@
+#+title: Security and Privacy
+#+language: en
+:PROPERTIES:
+:ID: v1-80-security
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Offline by default, local storage, controlled exports.
+:END:
+
+* Requirements (MUST)
+- No source code leaves the machine unless explicitly configured.
+- Store remains under project root; logs are local.
+- External tools (LSP/CLI) invoked only when enabled.

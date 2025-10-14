@@ -1,0 +1,25 @@
+#+title: Quality and Complexity Metrics (Provider Add-on)
+#+language: en
+:PROPERTIES:
+:ID: v1-49-quality
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Optional metrics to guide planning and ranking: complexity, fan-in/out, hotspots.
+:END:
+
+* Goals
+- Provide light-weight metrics to improve selection/ranking under token budgets.
+
+* Suggested metrics (Facts)
+- (:predicate quality :object "complexity=N fan-in=F fan-out=G hotspot=0|1")
+- Complexity: e.g., cyclomatic or LOC bands; Fan-in/out from edges; Churn from VCS (if enabled).
+- Centrality (approx): degree- or PageRank-lite on module graph.
+
+* Collection
+- Static pass: LOC per symbol/file; degree counts from edge maps.
+- Optional: integrate with external analyzers; emit facts with :source 'static|'cli, confidence.
+
+* Usage
+- Planner boosts interactive commands, high centrality symbols; deprioritizes large/low-signal spans.
+- APM Enrichment section may include top-k quality facts per budget.

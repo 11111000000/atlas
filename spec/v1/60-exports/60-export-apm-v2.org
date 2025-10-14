@@ -1,0 +1,49 @@
+#+title: Atlas Prompt Map (APM v2)
+#+language: en
+:PROPERTIES:
+:ID: v1-60-apm-v2
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Compact, textual export for LLM prompts. One fact per line, stable ordering, layered sections.
+:END:
+
+* Sections (order MUST be preserved)
+1) Header:
+   - Project: root=… languages=[…] files=N symbols=M edges=K facts=F generated=…
+2) Overview:
+   - Module: path=REL lang=… title=… summary=… provides=[…] imports=[…]
+3) API:
+   - API: kind=K name=FQNAME file=REL range=B..E exported?=t sig="…" doc="…"
+4) Edges:
+   - Edge: type=T from=K to=K
+5) Entrypoints:
+   - Entry: symbol=ID reason="…"
+6) Enrichment (active facts):
+   - Fact: subj=K pred=P obj=V source=S conf=X.Y
+7) Notes/TODO:
+   - Note: file=REL line=N tag=TODO text="…"
+
+* Determinism (MUST)
+- Sort keys lexicographically within sections.
+- Stable quoting for strings with escaped quotes.
+
+* EBNF (tangle target: ../10-ir/ebnf/apm-v2.ebnf)
+#+begin_src ebnf
+Line      ::= Header | Module | API | Edge | Entry | Fact | Note ;
+Header    ::= "Project:" SP KV (SP KV)* ;
+Module    ::= "Module:" SP KV (SP KV)* ;
+API       ::= "API:" SP KV (SP KV)* ;
+Edge      ::= "Edge:" SP KV (SP KV)* ;
+Entry     ::= "Entry:" SP KV (SP KV)* ;
+Fact      ::= "Fact:" SP KV (SP KV)* ;
+Note      ::= "Note:" SP KV (SP KV)* ;
+KV        ::= KEY "=" VALUE ;
+KEY       ::= ? [a-zA-Z0-9_:?-]+ ? ;
+VALUE     ::= STRING | NUMBER | BOOL | LIST | IDENT ;
+LIST      ::= "[" (VALUE ("," VALUE)*)? "]" ;
+STRING    ::= '\"' ( '\\\"' | ~'\"' )* '\"' ;
+NUMBER    ::= ? -?[0-9]+(\.[0-9]+)? ? ;
+BOOL      ::= "t" | "f" ;
+IDENT     ::= ? [^ \t\n\[\]\",]+ ? ;
+SP        ::= ? [ \t]+ ? ;

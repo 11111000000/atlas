@@ -1,0 +1,25 @@
+#+title: Glossary
+#+language: en
+:PROPERTIES:
+:ID: v1-01-glossary
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Terms and definitions for Atlas specification.
+:END:
+
+* Terms
+- IR: Internal representation of project structure in Atlas.
+- File: A project file entry with :path, :size, :mtime, :lang, flags.
+- Symbol: A top-level program entity (function, class, var, mode, etc.) with a stable :id.
+- Edge: A relationship (:type, :from, :to) between entities (import/require/provide/call/ref/...).
+- Summary: Text snippet or commentary bound to a file or symbol (optional).
+- Fact: An enrichment assertion (subject/predicate/object) with provenance/confidence/ttl.
+- APM: Atlas Prompt Map – compact text export for LLMs.
+- Provider: A source of data (Elisp, Tree-sitter, LSP, external CLI).
+- Store: On-disk sexp persistence under .context/atlas/v1/.
+
+* Conventions
+- IDs are language-prefixed, stable within file ranges: LANG:REL#NAME@BEG-END/KIND.
+- Edge types are canonical strings/symbols; new types may be added without breaking existing ones.
+- Sexps use keyword symbols (e.g. :path) as keys; values keep stable types.

@@ -1,0 +1,25 @@
+#+title: Entity Tree UI
+#+language: en
+:PROPERTIES:
+:ID: v1-70-entity-tree
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Text-only entity-centric tree views: by-feature, by-kind, search, edges, plan.
+:END:
+
+* Views
+- by-feature: feature → provider file → symbols (ordered by position).
+- by-kind: function/macro/var/custom/const grouped and sorted by name.
+- search: top-k results with in/out edges of selected file.
+- edges: local neighborhood around selector (file/feature/id).
+- plan: files and spans as built by planner (LLM budget-aware).
+
+* UX invariants
+- Deterministic ordering and stable headings; fold/unfold with markers ▸/▾.
+- Open/peek/copy actions; optional icons via all-the-icons.
+- Auto-refresh on index events when enabled.
+
+* Integration
+- Subscribes to event bus (:atlas-index-*) and reflects status line.
+- No external deps; works in TTY.

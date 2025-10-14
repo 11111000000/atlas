@@ -1,0 +1,31 @@
+#+title: Compression and Segmentation
+#+language: en
+:PROPERTIES:
+:ID: v1-22-compression
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Optional .sexp.gz compression and future segmentation guidance.
+:END:
+
+* Compression (.sexp.gz)
+- Writers MAY compress store files by using .sexp.gz suffix; readers MUST honor jka-compr seamlessly.
+- Behavior MUST be identical to .sexp; only the container differs.
+- Compression SHOULD be controlled via a boolean option stored in meta :opts (:compressed? t|nil).
+
+* Determinism
+- Serialization order MUST be stable to improve diffs, regardless of compression.
+- Pretty-printing is discouraged; use prin1 and a trailing newline.
+
+* Segmentation (future-friendly)
+- For very large stores, segments MAY split lists (symbols/edges) into multiple files by shard or module.
+- Segment selection MUST be deterministic (e.g., hash shard of :file or :from).
+- A single meta :opts (:segment-threshold INT) MAY indicate a soft threshold for when segmentation is advisable.
+
+* Migration considerations
+- Switch between compressed/uncompressed MUST NOT change schema or field ordering.
+- Segment-aware readers SHOULD fallback to legacy single-file mode when only monolithic files exist.
+
+* Operational guidance
+- Prefer compression in CI artifacts or when store sizes significantly impact I/O.
+- Avoid compressing during hot iteration loops; write once per batch or at the end of runs.

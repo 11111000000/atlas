@@ -1,0 +1,17 @@
+#+title: Migrations
+#+language: en
+:PROPERTIES:
+:ID: v1-23-migrations
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Schema versioning and migration policy.
+:END:
+
+* Policy (MUST)
+- Only additive changes within a schema version.
+- Type stability of existing keys.
+- Bumping :schema when non-additive changes are unavoidable, with a documented migration path.
+
+* Migration Records
+- v1 → (future): reserved.

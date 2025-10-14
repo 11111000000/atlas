@@ -1,0 +1,19 @@
+#+title: LLM Pack (Interoperability)
+#+language: en
+:PROPERTIES:
+:ID: v1-61-llm-pack
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Interoperable export (sexp primary, JSON optional).
+:END:
+
+* Formats
+- Primary: sexp (brief or rich variants).
+- Optional: JSON/JSONL for external tools.
+
+* Brief (sexp)
+- (:query STR :top [alist…] :files [REL…] :spans [alist…] :graph (:nodes [K…] :edges [alist…]) :est_tokens INT :rationale STR)
+
+* JSON (optional)
+- Keys mirror sexp; strings and arrays for structural equivalence.

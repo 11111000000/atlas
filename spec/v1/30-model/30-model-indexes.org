@@ -1,0 +1,23 @@
+#+title: In-memory Model and Indexes
+#+language: en
+:PROPERTIES:
+:ID: v1-30-model-indexes
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Hash indexes for files/symbols/edges and inverted index.
+:END:
+
+* Indexes
+- Files: path→file plist
+- Symbols: id→plist; name→[ids]
+- Edges: edges-out: from→[edge]; edges-in: to→[edge]
+- Inverted index: token→[ids]; id→[tokens]
+
+* Tokenization (default)
+- Lowercase ASCII [a-z0-9_]+.
+- Optional Unicode-aware mode (NFKC + [[:word:]]+; optional CamelCase splits).
+
+* Rebuild/Invalidate
+- Rebuild edges-in from edges-out on batch merge.
+- Inverted index rebuild on symbol changes.

@@ -1,0 +1,22 @@
+#+title: IR Core — File
+#+language: en
+:PROPERTIES:
+:ID: v1-11-files
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: File schema (sexp) and semantics.
+:END:
+
+* Schema (S-exp, plist)
+- (:path REL :size INT :mtime FLOAT :hash STR|nil :lang SYMBOL
+   :flags (:generated? t|nil :vendor? t|nil))
+
+* Requirements (MUST)
+- :path MUST be relative to project root.
+- :mtime MUST be seconds since epoch (float).
+- :lang SHOULD be a canonical symbol (elisp|ts|js|py|hs|...).
+
+* Notes (MAY)
+- :hash MAY be omitted; if present, MUST be a content hash for small files under configured threshold.
+- :flags/:generated? indicates generated code; :vendor? indicates vendored code.

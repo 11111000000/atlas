@@ -1,0 +1,8 @@
+Project: root=/home/az/Code/atlas languages=[elisp] files=2 symbols=1 edges=2 facts=2 generated=1730820002.12
+Module: path=lisp/foo.el lang=elisp title="Foo" summary="Core utilities" provides=[] imports=[feature:foo-core]
+API: kind=function name=bar file=lisp/foo.el range=120..260 exported?=f sig="(defun bar (x y))" doc="Return combined value of X and Y."
+Edge: type=require from=lisp/foo.el to=feature:foo-core
+Edge: type=provide from=lisp/foo-core.el to=feature:foo-core
+Entry: symbol=elisp:lisp/foo.el#bar@120-260/function reason="command"
+Fact: subj=elisp:lisp/foo.el#bar@120-260/function pred=role obj=command source=elisp conf=1.0
+Note: file=lisp/foo.el line=1 tag=TODO text="Add more unit tests"

@@ -1,0 +1,16 @@
+#+title: Tokenization
+#+language: en
+:PROPERTIES:
+:ID: v1-31-tokenization
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Tokenization modes and field weights.
+:END:
+
+* Modes
+- ASCII default: lowercase [a-z0-9_]+
+- Unicode mode: NFKC + [[:word:]]+, downcased; optional CamelCase split (additive tokens)
+
+* Fields (SHOULD)
+- Name (highest weight), signature, doc1, file path.

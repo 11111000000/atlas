@@ -1,0 +1,17 @@
+#+title: IR Core — Summaries
+#+language: en
+:PROPERTIES:
+:ID: v1-14-summaries
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Summaries as optional text snippets bound to file/symbol.
+:END:
+
+* Schema (S-exp, plist)
+- File summary: (:file REL :summary STR)
+- Symbol summary: (:symbol ID :summary STR)
+
+* Rules
+- Append-only in v1 store; deduplication MAY be done by tools.
+- Summaries MAY be used for search enrichment.

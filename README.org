@@ -7,14 +7,14 @@
 * Overview
 Atlas is a universal, extensible project map for Emacs. It builds and uses a structured map of your project: file inventory, symbols, dependencies, fast lexical retrieval, and budget-aware context planning for tasks and LLMs.
 
-- v1 scope: Emacs Lisp projects
+** v1 scope: Emacs Lisp projects
   - Build a map (L0 files, L1 symbols, L2 require/provide edges)
   - Incremental, deterministic indexing with TTL and change detection
   - Simple, fast lexical search with a lazy in-memory inverted index
   - Context planning: minimal spans around definitions under a token budget
   - Exports: subgraphs to DOT/Mermaid; language-agnostic JSON packs for LLMs
   - Async indexing, watch-mode, progress indicator, event bus
-- Design for growth
+** Design for growth
   - Clean core + thin ports, stable alist schemas, versioned on-disk format
   - Pluggable providers (Elisp today; LSP/ctags/external later)
 

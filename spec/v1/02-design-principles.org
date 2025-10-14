@@ -1,0 +1,21 @@
+#+title: Design Principles
+#+language: en
+:PROPERTIES:
+:ID: v1-02-principles
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Clean core, thin ports, determinism, extensibility, performance.
+:END:
+
+* Principles
+- Clean core + thin ports: pure data modeling and transforms; effects at edges.
+- Deterministic outputs: stable ordering, stable IDs, predictable exports.
+- Extensible core: add fields/predicates without breaking readers; use facts for enrichment.
+- Lazy, incremental, and budget-aware: scale to large repos.
+- LLM-first exports: human-readable lines, compact facts, layered sections.
+
+* Trade-offs (dialectic)
+- Static precision vs speed → multi-level sources (L0..L3) + enrichment.
+- JSON vs S-exp → S-exp as primary, JSON for interop.
+- Language-specific depth vs universal schema → core plus per-language mapping matrices.

@@ -1,0 +1,29 @@
+#+title: IR Core — Symbol
+#+language: en
+:PROPERTIES:
+:ID: v1-12-symbols
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Symbol schema, IDs, kinds, visibility.
+:END:
+
+* Schema (S-exp, plist)
+- (:id STR :file REL :name STR :kind SYMBOL
+   :beg INT :end INT
+   :sig STR|nil :doc1 STR|nil
+   :exported? t|nil
+   :source SYMBOL :lang SYMBOL)
+
+* ID Format (MUST)
+- "LANG:REL#NAME@BEG-END/KIND"
+- LANG is a short language tag (elisp/ts/js/py/hs); REL is relative file path.
+
+* Requirements
+- :file MUST be a REL that matches an existing File entry.
+- :kind MUST be canonical (function|macro|var|custom|const|class|interface|type|...).
+- :beg/:end are character positions within the file buffer.
+
+* Recommendations (SHOULD)
+- :doc1 SHOULD be the first line of the docstring or comment near definition.
+- :sig SHOULD be a compact signature (defun header, function decl, type signature).

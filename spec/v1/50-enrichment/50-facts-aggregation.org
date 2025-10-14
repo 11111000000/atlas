@@ -1,0 +1,20 @@
+#+title: Facts Aggregation and Conflict Resolution
+#+language: en
+:PROPERTIES:
+:ID: v1-50-facts-agg
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Fact storage, selection of active facts, and priorities.
+:END:
+
+* Priorities
+- static/LSP > treesit > heuristic > llm (configurable).
+- Higher confidence; newer timestamps; higher weight.
+
+* Active facts (MUST)
+- For (subject,predicate), choose a single active fact by priorities above.
+- User-pinned facts override others.
+
+* TTL/Expiry
+- LLM facts SHOULD carry ttl and be excluded after expiry.

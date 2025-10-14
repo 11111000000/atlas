@@ -1,0 +1,29 @@
+#+title: IR Core — Facts (Enrichment)
+#+language: en
+:PROPERTIES:
+:ID: v1-15-facts
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Extensible assertions layer with provenance, confidence, ttl, and conflict resolution.
+:END:
+
+* Schema (S-exp, plist)
+- (:id STR
+   :subject KEY
+   :predicate SYMBOL
+   :object ANY
+   :source SYMBOL ; 'treesit | 'lsp | 'static | 'heuristic | 'llm | 'user
+   :confidence FLOAT ; 0.0..1.0
+   :weight FLOAT|nil
+   :evidence ((file . REL) (range . (BEG . END)) (text . STR) (hash . STR))|nil
+   :ts FLOAT :ttl INT|nil :expires FLOAT|nil
+   :author STRING|SYMBOL|nil :version STRING|nil
+   :tags LIST|nil)
+
+* Conflict Resolution (SHOULD)
+- Prefer higher source priority (static/LSP > treesit > heuristic > llm) then higher confidence, then recency.
+- LLM-derived facts SHOULD have ttl; user-pinned facts override conflict resolution.
+
+* Predicates (examples)
+- role, visibility, entrypoint, cluster, belongs-to, type, quality, keybind, doc-topic, similar-to, duplicate-of, instance-of.

@@ -1,0 +1,19 @@
+#+title: Store Serialization
+#+language: en
+:PROPERTIES:
+:ID: v1-21-serialization
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: S-exp serialization rules and stability.
+:END:
+
+* Rules (MUST)
+- Use printed Emacs Lisp forms (prin1) with stable keyword keys.
+- File lists MUST serialize as a single list per file (full replace).
+- Symbols/Edges MAY be replaced per-file when batch includes (:file REL).
+- Readers MUST ignore unknown keys; writers MUST NOT reorder fields unnecessarily.
+
+* Meta (plist)
+- (:schema INT :project-root STR :generated-at FLOAT :counts (:files :symbols :edges :facts :summaries) :languages LIST :opts PLIST)
+- Notes: :facts and :summaries in :counts are optional and MAY be omitted; readers MUST ignore unknown keys in :counts.

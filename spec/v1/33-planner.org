@@ -1,0 +1,18 @@
+#+title: Context Planner
+#+language: en
+:PROPERTIES:
+:ID: v1-33-planner
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Token-budgeted plan with spans and 1-hop expansion.
+:END:
+
+* Plan
+- Inputs: query string, k, budget, model kind.
+- Outputs: files, spans, rationale, est_tokens, items.
+
+* Heuristics
+- Primary spans around definitions; ±N lines.
+- 1-hop via require→provide providers.
+- Stop when budget would be exceeded.

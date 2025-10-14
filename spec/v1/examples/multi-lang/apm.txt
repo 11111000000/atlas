@@ -1,0 +1,19 @@
+Project: root=/proj languages=[elisp,ts,hs,py] files=4 symbols=4 edges=7 facts=4 generated=1730820200.00
+Module: path=lisp/atlas.el lang=elisp title="Atlas Core" summary="Index and commands" provides=[feature:atlas] imports=[feature:atlas-store]
+Module: path=src/app/main.ts lang=ts title="App main" summary="SPA init" provides=[symbol:app.init] imports=[module:@angular/core]
+Module: path=app/Main.hs lang=hs title="Main" summary="" provides=[] imports=[module:Data.Text]
+Module: path=src/cli.py lang=py title="CLI" summary="Command line" provides=[] imports=[module:argparse]
+API: kind=function name=atlas-index file=lisp/atlas.el range=100..600 exported?=t sig="(defun atlas-index ...)" doc="Index ROOT. Full or changed-only."
+API: kind=function name=init file=src/app/main.ts range=120..340 exported?=t sig="init(cfg: Config): Promise<void>" doc="Initialize app."
+API: kind=function name=Main.main file=app/Main.hs range=10..40 exported?=t sig="main :: IO ()" doc=""
+API: kind=function name=main file=src/cli.py range=50..120 exported?=t sig="def main(argv: list[str]) -> int" doc="CLI entrypoint."
+Edge: type=require from=lisp/atlas.el to=feature:atlas-store
+Edge: type=provide from=lisp/atlas.el to=feature:atlas
+Edge: type=import from=src/app/main.ts to=module:@angular/core
+Edge: type=export from=src/app/main.ts to=symbol:app.init
+Edge: type=import from=app/Main.hs to=module:Data.Text
+Edge: type=import from=src/cli.py to=module:argparse
+Edge: type=type-ref from=ts:src/app/main.ts#init@120-340/function to=interface:Config
+Entry: symbol=hs:app/Main.hs#Main.main@10-40/function reason="main"
+Entry: symbol=py:src/cli.py#main@50-120/function reason="cli"
+Fact: subj=ts:src/app/main.ts#init@120-340/function pred=type obj="(cfg: Config) => Promise<void>" source=lsp conf=0.95

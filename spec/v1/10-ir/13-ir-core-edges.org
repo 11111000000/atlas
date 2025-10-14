@@ -1,0 +1,28 @@
+#+title: IR Core — Edge
+#+language: en
+:PROPERTIES:
+:ID: v1-13-edges
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Edge schema and canonical types.
+:END:
+
+* Schema (S-exp, plist)
+- (:type SYMBOL|STRING :from KEY :to KEY :weight FLOAT|nil :source SYMBOL :span (BEG . END)|nil)
+
+Where KEY is a file REL, symbol :id, or a typed virtual key (e.g., "feature:NAME", "module:NAME", "symbol:FQNAME", "interface:NAME", "typeclass:NAME", "enum:NAME"). Consumers MUST accept unknown virtual prefixes.
+
+* Canonical Types (MUST)
+- import, export, define, call, ref
+- require, provide (Lisp features)
+- reexport, dynamic-import (TS/JS)
+- implement, extend, inherit, type-ref (TS/Hs)
+- autoload, keybind (Elisp)
+- test-of
+- instance-of, constructor-of (Hs)
+
+* Requirements
+- :from and :to MUST be comparable keys; consumers MUST accept string or symbol keys.
+- Consumers MUST accept unknown virtual prefixes (e.g., "symbol:", "interface:", "typeclass:", etc.) for :from/:to keys.
+- Unknown types MUST NOT break consumers; they SHOULD be ignored.

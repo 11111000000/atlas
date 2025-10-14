@@ -1,0 +1,25 @@
+#+title: IR Overview
+#+language: en
+:PROPERTIES:
+:ID: v1-10-ir-overview
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Core IR entities, invariants, extensibility model.
+:END:
+
+* Core Entities
+- File: inventory item.
+- Symbol: top-level program entity with stable :id.
+- Edge: relation between entities.
+- Summary: text/commentary snippet (optional).
+- Fact: enrichment assertion with provenance (optional, additive).
+
+* Invariants (MUST)
+- IDs MUST be stable within a file across runs if source spans do not change.
+- Keys MUST keep types across schema versions; new keys MUST be optional.
+- Edge :type MUST be a canonical symbol/string; readers MUST ignore unknown types.
+
+* Extensibility
+- Additional fields MAY be added to files/symbols/edges; readers SHOULD ignore unknown keys.
+- Facts carry enrichment and conflict resolution metadata (confidence, source, ttl).

@@ -1,0 +1,18 @@
+(* This file is intended to be tangled from 60-export-apm-v2.org; kept here for tooling convenience. *)
+Line      ::= Header | Module | API | Edge | Entry | Fact | Note ;
+Header    ::= "Project:" SP KV (SP KV)* ;
+Module    ::= "Module:" SP KV (SP KV)* ;
+API       ::= "API:" SP KV (SP KV)* ;
+Edge      ::= "Edge:" SP KV (SP KV)* ;
+Entry     ::= "Entry:" SP KV (SP KV)* ;
+Fact      ::= "Fact:" SP KV (SP KV)* ;
+Note      ::= "Note:" SP KV (SP KV)* ;
+KV        ::= KEY "=" VALUE ;
+KEY       ::= ? [a-zA-Z0-9_:?-]+ ? ;
+VALUE     ::= STRING | NUMBER | BOOL | LIST | IDENT ;
+LIST      ::= "[" (VALUE ("," VALUE)*)? "]" ;
+STRING    ::= '\"' ( '\\\"' | ~'\"' )* '\"' ;
+NUMBER    ::= ? -?[0-9]+(\.[0-9]+)? ? ;
+BOOL      ::= "t" | "f" ;
+IDENT     ::= ? [^ \t\n\[\]\",]+ ? ;
+SP        ::= ? [ \t]+ ? ;

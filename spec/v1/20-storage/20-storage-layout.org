@@ -1,0 +1,24 @@
+#+title: Storage Layout
+#+language: en
+:PROPERTIES:
+:ID: v1-20-storage-layout
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: On-disk layout under .context/atlas/v1/.
+:END:
+
+* Directory
+- <root>/.context/atlas/v1/
+
+* Files (sexp)
+- meta.sexp
+- files.sexp
+- symbols.sexp
+- edges.sexp
+- summaries.sexp
+- facts.sexp (optional, if enrichment enabled)
+
+* Requirements (MUST)
+- Sexps MUST be top-level lists (except meta which is a plist).
+- Compression via .sexp.gz MAY be used; behavior MUST be identical.

@@ -1,0 +1,40 @@
+#+title: Query Ranking
+#+language: en
+:PROPERTIES:
+:ID: v1-32-query-ranking
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Scoring, boosts, and deterministic tie-breaking for lexical search.
+:END:
+
+* Inputs
+- Tokens from query after normalization (see v1-31-tokenization).
+- Candidate symbols from inverted index postings.
+
+* Scoring (baseline)
+- Term frequency across fields (name, sig, doc1, path) with additive score:
+  - Base +1 per matched token occurrence (unique per id).
+- Boosts:
+  - Exact name match: +5
+  - Name prefix match: +1
+- Field weighting (optional):
+  - name ×2, sig ×1, doc1 ×0.5, path ×0.25 (if enabled).
+
+* Tie-breaking (MUST)
+- Deterministic: sort by (-score, id lexicographically).
+- Truncate to top-k after sorting.
+
+* Filters (optional)
+- By kind (function, macro, var…), by language, by file path prefix.
+- Post-filtering MUST preserve deterministic ordering.
+
+* Budget-awareness (SHOULD)
+- Expose estimated token cost per candidate span; allow early stopping at plan stage.
+- Keep ranking independent from plan, but provide hooks for planner boosts.
+
+* Evaluation (SHOULD)
+- Track success@k for internal test corpora; ensure stability across runs.
+
+* Extensibility
+- Future: semantic re-rank hooks; learned weights; LLM-assisted feedback loops.

@@ -1,0 +1,44 @@
+#+title: Events Bus
+#+language: en
+:PROPERTIES:
+:ID: v1-34-events-bus
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Publish/subscribe API, topics, determinism, and safety guarantees.
+:END:
+
+* Summary
+A lightweight, exception-safe events bus for indexing lifecycle and UI. Handlers subscribe to topics and receive argument plists. The bus MUST never throw from user handlers; errors are logged. Emission is synchronous in v1.
+
+* Topics (reserved)
+- :atlas-index-start — args: :root STR :full t|nil
+- :atlas-index-progress — args: :files INT :symbols INT :edges INT
+- :atlas-index-done — args: :root STR :counts PLIST
+- :atlas-index-error — args: :root STR :reason SYMBOL
+
+* API (MUST)
+- (atlas-events-subscribe TOPIC FN) → UNSUB-LAMBDA
+  - FN receives &rest ARGS (plist), MUST be exception-safe; bus will catch.
+  - Return value of FN is ignored.
+- (atlas-events-unsubscribe TOPIC FN) → t
+- (atlas-events-publish TOPIC &rest ARGS) → t
+  - Synchronous delivery in subscription order.
+  - Exceptions in handlers are caught and logged; subsequent handlers still run.
+
+* Determinism (SHOULD)
+- Delivery order follows latest subscription order (newest first) or a fixed stable order; implementation MUST document chosen order.
+- Handlers SHOULD be idempotent and fast; long-running work should be offloaded.
+
+* Safety (MUST)
+- Never block Emacs critically; heavy handlers should schedule timers/jobs.
+- Exceptions from handlers MUST be caught; bus MUST log with level :error and continue.
+- Unsubscribe lambdas MUST be idempotent.
+
+* Performance (SHOULD)
+- Keep per-topic handler lists short; logging and string formatting should be gated by a flag.
+- Throttle high-frequency topics in UI layers as needed.
+
+* Testing (SHOULD)
+- Subscribe/unsubscribe lifecycle, idempotency.
+- Publish with multiple handlers including one that signals an error — bus continues.

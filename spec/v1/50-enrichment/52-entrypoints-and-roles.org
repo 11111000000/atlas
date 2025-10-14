@@ -1,0 +1,23 @@
+#+title: Entrypoints and Roles (Cross-language Heuristics)
+#+language: en
+:PROPERTIES:
+:ID: v1-52-entrypoints-roles
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Heuristics and facts to identify entrypoints and roles across languages.
+:END:
+
+* Entrypoints (Facts)
+- Lisp: (interactive …), define-(minor|global)-mode → (entrypoint command|mode), (role command|mode).
+- TS/JS: package.json bin/main, app main modules → entrypoint main|cli.
+- Python: if __name__ == "__main__", console_scripts in setup.cfg/pyproject → entrypoint cli|script.
+- Haskell: Main.main :: IO () → entrypoint main; cabal executable main-is.
+
+* Roles (Facts)
+- UI/View/Component, Service/Controller, Data/Model, Macro-helper, Test, Tooling.
+- Predicates: (role service), (role component), (role test), etc.
+
+* Emission
+- Providers and LLM can emit facts with :source 'static|'heuristic|'llm, :confidence, :ttl.
+- Conflict resolution per v1-50-facts-agg.

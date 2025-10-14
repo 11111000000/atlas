@@ -1,0 +1,21 @@
+#+title: Clusters and Thematic Grouping
+#+language: en
+:PROPERTIES:
+:ID: v1-53-clusters
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Clusters as first-class entities; LLM-driven and static grouping.
+:END:
+
+* Cluster entity
+- ID: "cluster:ID"; label/name; members [symbol-ids]; centroid/notes optional.
+- Facts:
+  - (label "…"), (members [id…]), (source llm|static), (confidence X.Y), (ttl SECONDS).
+
+* Membership
+- Symbol-level fact: (cluster "cluster:ID").
+- APM Enrichment: emit top clusters with labels and member counts.
+
+* Generation
+- LLM-based clustering over names/docs/edges; static grouping by directory/module/package boundaries as baseline.

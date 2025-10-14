@@ -1,0 +1,31 @@
+#+title: Providers Contract
+#+language: en
+:PROPERTIES:
+:ID: v1-40-providers-contract
+:STATUS: Normative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Registration, capabilities, batch emission, error handling.
+:END:
+
+* Registration
+- (atlas-register-source NAME :capabilities CAPS :fn FN :cost COST)
+
+* Capabilities
+- (:languages (elisp ts js py hs ...))
+- (:kinds (files symbols edges summaries facts))
+- (:levels (L0 L1 L2 L3))
+
+* Invocation
+- (FN :root ROOT :changed PATHS :emit EMIT :done DONE :opts OPTS)
+- EMIT receives an alist batch:
+  - (:files LIST) full replace of files
+  - (:symbols LIST) symbols; if (:file REL) present, replace per-file
+  - (:edges LIST) edges; if (:file REL) present, replace per-file
+  - (:summaries LIST) append-only
+  - (:facts LIST) append/merge (optional)
+  - optional (:file REL)
+
+* Requirements (MUST)
+- Providers MUST NOT block Emacs main thread for long; prefer chunked emission.
+- Batches MUST be deterministic across runs for unchanged inputs.

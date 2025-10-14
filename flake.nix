@@ -17,15 +17,16 @@
         shellHook = ''
           echo "Run tests: emacs -Q --batch -L lisp -l test/ert-runner.el"
           echo "Or via flake app: nix run .#tests"
+          echo "Generate spec index: nix run .#spec-index"
         '';
       };
     });
 
-    # nix run .#tests
+    # nix run .#tests, nix run .#spec-index
     apps = forAllSystems (pkgs:
       let
         emacs = pkgs.emacs-nox;
-        drv = pkgs.writeShellApplication {
+        testsDrv = pkgs.writeShellApplication {
           name = "atlas-tests";
           # rg may be used by tests/getters
           runtimeInputs = [ pkgs.ripgrep ];
@@ -34,8 +35,19 @@
             exec ${emacs}/bin/emacs -Q --batch -L ${./lisp} -l ${./test}/ert-runner.el
           '';
         };
+        specIndexDrv = pkgs.writeShellApplication {
+          name = "atlas-spec-index";
+          runtimeInputs = [ pkgs.emacs-nox ];
+          text = ''
+            set -euo pipefail
+            # Generate spec-index.sexp and link-map.sexp (auto-detects spec root: ./spec/v1 or ./s/v)
+            exec ${emacs}/bin/emacs -Q --batch \
+              --eval "(progn (load-file (expand-file-name \"spec/scripts/mk-index.el\" default-directory)) (atlas-spec-generate nil))"
+          '';
+        };
       in rec {
-        tests = { type = "app"; program = "${drv}/bin/atlas-tests"; };
+        tests = { type = "app"; program = "${testsDrv}/bin/atlas-tests"; };
+        spec-index = { type = "app"; program = "${specIndexDrv}/bin/atlas-spec-index"; };
         default = tests;
       });
 

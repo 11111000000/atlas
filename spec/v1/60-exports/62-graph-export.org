@@ -1,0 +1,22 @@
+#+title: Graph Export (DOT/Mermaid)
+#+language: en
+:PROPERTIES:
+:ID: v1-62-graph-export
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Contract for graph exports used for visualization (DOT/Mermaid).
+:END:
+
+* Contract
+- Input: selector (file REL | symbol-id | feature:NAME | list), depth, edge-type filter.
+- Output:
+  - DOT "digraph Atlas" with box nodes, edges labeled by :type.
+  - Mermaid "graph LR" with nodes as boxes, CSS classes edge_TYPE optional.
+
+* Determinism
+- Node order sorted lexicographically; edges sorted by (type, from, to).
+- Escaping for quotes in labels required.
+
+* Use-cases
+- Quick inspection of module deps; selection of subgraphs for documentation; CI artifacts.

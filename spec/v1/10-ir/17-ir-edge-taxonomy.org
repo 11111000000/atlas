@@ -1,0 +1,17 @@
+#+title: Edge Taxonomy Matrix
+#+language: en
+:PROPERTIES:
+:ID: v1-17-edge-taxonomy
+:STATUS: Informative
+:VERSION: 1.0
+:UPDATED: 2025-10-14
+:SUMMARY: Cross-language edge matrix and expected sources.
+:END:
+
+* Matrix Notes
+- import/export: TS/JS/Py/Hs (treesit/LSP)
+- require/provide: Elisp (static)
+- call/ref: all languages (LSP/heuristic), scope-limited by budget
+- implement/extend/inherit/type-ref: TS/Hs (LSP/compiler)
+- autoload/keybind: Elisp (static)
+- test-of: heuristics based on test frameworks per language
