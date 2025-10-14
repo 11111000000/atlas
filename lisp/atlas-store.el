@@ -7,7 +7,8 @@
 ;;  - files.sexp: list of file plists
 ;;  - symbols.sexp: list of symbol plists
 ;;  - edges.sexp: list of edge plists
-;;  - summaries.sexp: list of summary plists (reserved)
+;;  - summaries.sexp: list of summary plists (optional)
+;;  - facts.sexp: list of fact plists (optional)
 
 ;;; Code:
 
@@ -66,11 +67,13 @@
 (defun atlas-store-load-symbols (root) (atlas-store-load root "symbols"))
 (defun atlas-store-load-edges (root) (atlas-store-load root "edges"))
 (defun atlas-store-load-summaries (root) (atlas-store-load root "summaries"))
+(defun atlas-store-load-facts (root) (atlas-store-load root "facts"))
 
 (defun atlas-store-save-files (root files) (atlas-store-save root "files" files))
 (defun atlas-store-save-symbols (root symbols) (atlas-store-save root "symbols" symbols))
 (defun atlas-store-save-edges (root edges) (atlas-store-save root "edges" edges))
 (defun atlas-store-save-summaries (root sums) (atlas-store-save root "summaries" sums))
+(defun atlas-store-save-facts (root facts) (atlas-store-save root "facts" facts))
 
 (defun atlas-store--remove-symbols-for-file (symbols rel)
   "Return SYMBOLS list without entries whose :file equals REL."
@@ -84,7 +87,7 @@
               edges))
 
 (defun atlas-store-save-batch (root batch)
-  "Save BATCH keys :files :symbols :edges :summaries to store.
+  "Save BATCH keys :files :symbols :edges :summaries :facts to store.
 If BATCH contains :files, overwrite files.sexp with given list.
 If BATCH contains :symbols or :edges, remove prior entries for the given :file (if provided),
 then append new ones."
@@ -92,9 +95,10 @@ then append new ones."
          (symbols (alist-get :symbols batch))
          (edges (alist-get :edges batch))
          (sums (alist-get :summaries batch))
+         (facts (alist-get :facts batch))
          (rel (alist-get :file batch)))
-    (atlas-log :debug "store:save-batch root=%s rel=%s files=%d symbols=%d edges=%d sums=%d"
-               root (or rel "-") (length files) (length symbols) (length edges) (length sums))
+    (atlas-log :debug "store:save-batch root=%s rel=%s files=%d symbols=%d edges=%d sums=%d facts=%d"
+               root (or rel "-") (length files) (length symbols) (length edges) (length sums) (length facts))
     ;; Files: if provided, overwrite inventory
     (when files
       (atlas-store-save-files root files))
@@ -115,15 +119,23 @@ then append new ones."
       (let* ((current (atlas-store-load-summaries root))
              (new (nconc current (copy-sequence sums))))
         (atlas-store-save-summaries root new)))
+    ;; Facts: append (merge/conflict policy is responsibility of aggregator)
+    (when facts
+      (let* ((current (atlas-store-load-facts root))
+             (new (nconc current (copy-sequence facts))))
+        (atlas-store-save-facts root new)))
     t))
 
 (defun atlas-store-counts (root)
-  "Return current counts in store for ROOT as plist :files :symbols :edges."
+  "Return current counts in store for ROOT as plist :files :symbols :edges :summaries :facts."
   (let* ((files (length (atlas-store-load-files root)))
          (symbols (length (atlas-store-load-symbols root)))
-         (edges (length (atlas-store-load-edges root))))
-    (atlas-log :debug "store:counts root=%s files=%d symbols=%d edges=%d" root files symbols edges)
-    (list :files files :symbols symbols :edges edges)))
+         (edges (length (atlas-store-load-edges root)))
+         (summaries (length (atlas-store-load-summaries root)))
+         (facts (length (atlas-store-load-facts root))))
+    (atlas-log :debug "store:counts root=%s files=%d symbols=%d edges=%d summaries=%d facts=%d"
+               root files symbols edges summaries facts)
+    (list :files files :symbols symbols :edges edges :summaries summaries :facts facts)))
 
 (provide 'atlas-store)
 

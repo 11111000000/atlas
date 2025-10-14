@@ -3,7 +3,7 @@
 ;;; Commentary:
 ;; Providers register with capabilities and a function with signature:
 ;; (FN :root ROOT :changed PATHS :emit EMIT :done DONE :opts OPTS)
-;; EMIT receives an alist: (:files LIST) (:symbols LIST) (:edges LIST) (:summaries LIST)
+;; EMIT receives an alist: (:files LIST) (:symbols LIST) (:edges LIST) (:summaries LIST) (:facts LIST)
 
 ;;; Code:
 

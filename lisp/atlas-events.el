@@ -3,6 +3,7 @@
 ;;; Commentary:
 ;; Publish/subscribe with topic symbols. Handlers are exception-safe.
 ;; Returns unsubscribe lambdas.
+;; Delivery order is newest-first (latest subscription handled first).
 
 ;;; Code:
 

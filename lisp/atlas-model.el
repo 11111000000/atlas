@@ -232,15 +232,16 @@ then downcase tokens; when `atlas-tokenize-camelcase' is also non-nil, split Cam
       (nreverse (atlas-model--dedup-list res)))))
 
 (cl-defun atlas-model-merge-batch (state batch)
-  "Merge BATCH into STATE indexes. BATCH may include :files :symbols :edges and :file REL.
+  "Merge BATCH into STATE indexes. BATCH may include :files :symbols :edges :facts and :file REL.
 Symbols and edges are replaced per file REL. Without REL, symbols are appended
-and edges are appended grouped by their :from key."
+and edges are appended grouped by their :from key. Facts are appended (aggregation selects active ones)."
   (let* ((files (alist-get :files batch))
          (symbols (alist-get :symbols batch))
          (edges (alist-get :edges batch))
+         (facts (alist-get :facts batch))
          (rel (alist-get :file batch)))
-    (atlas-log :trace "model:merge-batch rel=%s files=%d symbols=%d edges=%d"
-               (or rel "-") (length files) (length symbols) (length edges))
+    (atlas-log :trace "model:merge-batch rel=%s files=%d symbols=%d edges=%d facts=%d"
+               (or rel "-") (length files) (length symbols) (length edges) (length facts))
     (when files
       (atlas-model--set-files state files))
     (when rel
@@ -263,6 +264,10 @@ and edges are appended grouped by their :from key."
             (when from
               (atlas-model--push out from e))))
         (atlas-model--rebuild-edges-in state)))
+    ;; Facts: append into facts indexes
+    (when facts
+      (dolist (f facts)
+        (ignore-errors (atlas-model--index-fact state f))))
     (when (or symbols edges)
       ;; Edges don't affect inv-index, but keep behavior consistent
       (atlas-model--clear-inv state)))
@@ -273,7 +278,8 @@ and edges are appended grouped by their :from key."
   (let* ((root (plist-get state :root))
          (files (ignore-errors (atlas-store-load-files root)))
          (symbols (ignore-errors (atlas-store-load-symbols root)))
-         (edges (ignore-errors (atlas-store-load-edges root))))
+         (edges (ignore-errors (atlas-store-load-edges root)))
+         (facts (ignore-errors (atlas-store-load-facts root))))
     (when (listp files) (atlas-model--set-files state files))
     ;; Symbols
     (let ((by-id (atlas-model--get-idx state atlas-model--k-sym-by-id))
@@ -289,8 +295,108 @@ and edges are appended grouped by their :from key."
         (let ((from (plist-get e :from)))
           (when from (atlas-model--push out from e)))))
     (atlas-model--rebuild-edges-in state)
+    ;; Facts
+    (let ((sb (atlas-model--get-idx state atlas-model--k-facts-by-subj))
+          (pp (atlas-model--get-idx state atlas-model--k-facts-by-pred)))
+      (clrhash sb)
+      (clrhash pp)
+      (dolist (f facts)
+        (ignore-errors (atlas-model--index-fact state f))))
     (atlas-model--clear-inv state)
     state))
+
+;; ---- Facts indexes and active selection (enrichment) ----
+
+(defconst atlas-model--k-facts-by-subj :facts-by-subject)
+(defconst atlas-model--k-facts-by-pred :facts-by-predicate)
+
+(defun atlas-model--index-fact (state fact)
+  "Index FACT into STATE facts maps."
+  (let* ((sb (atlas-model--get-idx state atlas-model--k-facts-by-subj))
+         (pp (atlas-model--get-idx state atlas-model--k-facts-by-pred))
+         (subj (plist-get fact :subject))
+         (pred (plist-get fact :predicate)))
+    (when subj (atlas-model--push sb subj fact))
+    (when pred (atlas-model--push pp pred fact))
+    t))
+
+(defun atlas-model-facts (state &optional subject predicate)
+  "Return list of facts from STATE. Optionally filter by SUBJECT and/or PREDICATE."
+  (cond
+   ((and subject predicate)
+    (seq-filter (lambda (f) (eq (plist-get f :predicate) predicate))
+                (copy-sequence (gethash subject (atlas-model--get-idx state atlas-model--k-facts-by-subj)))))
+   (subject
+    (copy-sequence (gethash subject (atlas-model--get-idx state atlas-model--k-facts-by-subj))))
+   (predicate
+    (copy-sequence (gethash predicate (atlas-model--get-idx state atlas-model--k-facts-by-pred))))
+   (t
+    (let* ((sb (atlas-model--get-idx state atlas-model--k-facts-by-subj))
+           (acc '()))
+      (maphash (lambda (_k lst) (setq acc (nconc lst acc))) sb)
+      (nreverse acc)))))
+
+(defun atlas-model--source-priority (src)
+  "Return numeric priority for source symbol SRC (higher is stronger)."
+  (pcase src
+    ((or 'static 'lsp 'cli) 4)
+    ((or 'treesit 'elisp) 3)
+    ('heuristic 2)
+    ('llm 1)
+    (_ 0)))
+
+(cl-defun atlas-model-active-facts (state &key min-confidence)
+  "Select active facts from STATE by (subject,predicate) using priorities and confidence.
+Optional MIN-CONFIDENCE filters out facts below threshold."
+  (let* ((sb (atlas-model--get-idx state atlas-model--k-facts-by-subj))
+         (res '())
+         (minc (or min-confidence 0.0)))
+    (maphash
+     (lambda (subj lst)
+       ;; Group by predicate
+       (let ((by (make-hash-table :test #'eq)))
+         (dolist (f lst)
+           (let ((pred (plist-get f :predicate))
+                 (conf (or (plist-get f :confidence) 0.0)))
+             (when (>= conf minc)
+               (atlas-model--push by pred f))))
+         (maphash
+          (lambda (_pred flist)
+            ;; pick best by (src-priority, conf, ts, weight)
+            (let ((best nil))
+              (dolist (f flist)
+                (let* ((src (plist-get f :source))
+                       (pri (atlas-model--source-priority src))
+                       (conf (or (plist-get f :confidence) 0.0))
+                       (ts   (or (plist-get f :ts) 0.0))
+                       (w    (or (plist-get f :weight) 0.0)))
+                  (when (or (null best)
+                            (> pri (plist-get best :_pri))
+                            (and (= pri (plist-get best :_pri))
+                                 (or (> conf (plist-get best :_conf))
+                                     (and (= conf (plist-get best :_conf))
+                                          (or (> ts (plist-get best :_ts))
+                                              (> w (plist-get best :_w)))))))
+                    (setq best (list :_pri pri :_conf conf :_ts ts :_w w :fact f)))))
+              (when best (push (plist-get best :fact) res))))
+          by)))
+     sb)
+    ;; Deterministic order: subj, pred, obj strings
+    (setq res
+          (seq-sort
+           (lambda (a b)
+             (let ((sa (format "%s" (plist-get a :subject)))
+                   (sbj (format "%s" (plist-get b :subject)))
+                   (pa (format "%s" (plist-get a :predicate)))
+                   (pb (format "%s" (plist-get b :predicate)))
+                   (oa (format "%s" (plist-get a :object)))
+                   (ob (format "%s" (plist-get b :object))))
+               (or (string-lessp sa sbj)
+                   (and (string= sa sbj)
+                        (or (string-lessp pa pb)
+                            (and (string= pa pb) (string-lessp oa ob)))))))
+           res))
+    res))
 
 (provide 'atlas-model)
 

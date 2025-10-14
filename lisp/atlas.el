@@ -135,7 +135,7 @@ Always returns an expanded directory path with trailing slash."
   (list :schema 1
         :project-root (file-name-as-directory (expand-file-name root))
         :generated-at (atlas--now)
-        :counts (list :files 0 :symbols 0 :edges 0)
+        :counts (list :files 0 :symbols 0 :edges 0 :facts 0 :summaries 0)
         :languages '(elisp)
         :opts (list :segment-threshold atlas-segment-threshold
                     :compressed? (and atlas-store-compressed t))))
@@ -193,11 +193,14 @@ Always returns an expanded directory path with trailing slash."
       (message "Atlas closed for %s" root))
     t))
 
-(defun atlas--update-meta-counts (state files symbols edges)
+(defun atlas--update-meta-counts (state files symbols edges &optional facts summaries)
   (let* ((meta (plist-get state :meta))
-         (counts (list :files (or files (plist-get (plist-get meta :counts) :files))
-                       :symbols (or symbols (plist-get (plist-get meta :counts) :symbols))
-                       :edges (or edges (plist-get (plist-get meta :counts) :edges)))))
+         (oldc (plist-get meta :counts))
+         (counts (list :files (or files (plist-get oldc :files))
+                       :symbols (or symbols (plist-get oldc :symbols))
+                       :edges (or edges (plist-get oldc :edges))
+                       :facts (or facts (plist-get oldc :facts) 0)
+                       :summaries (or summaries (plist-get oldc :summaries) 0))))
     (plist-put meta :counts counts)
     (plist-put meta :generated-at (atlas--now))
     (plist-put state :meta meta)
@@ -212,10 +215,12 @@ Always returns an expanded directory path with trailing slash."
            (atlas--project-root default-directory))))
   (let* ((state (or (atlas-state root) (atlas-open root)))
          (meta (plist-get state :meta))
-         (counts (or (plist-get meta :counts) (list :files 0 :symbols 0 :edges 0)))
+         (counts (or (plist-get meta :counts) (list :files 0 :symbols 0 :edges 0 :facts 0 :summaries 0)))
          (res (list :files (plist-get counts :files)
                     :symbols (plist-get counts :symbols)
                     :edges (plist-get counts :edges)
+                    :facts (plist-get counts :facts)
+                    :summaries (plist-get counts :summaries)
                     :t-indexed (- (atlas--now) (or (plist-get state :last-index-at) 0.0))
                     :schema (plist-get meta :schema))))
     (when (called-interactively-p 'interactive)
@@ -343,7 +348,9 @@ If nil, apply TTL/changed-only policy: full if TTL expired, else changed-only."
               (setf state (atlas--update-meta-counts state
                                                      (and cur (plist-get cur :files))
                                                      (and cur (plist-get cur :symbols))
-                                                     (and cur (plist-get cur :edges)))))
+                                                     (and cur (plist-get cur :edges))
+                                                     (and cur (plist-get cur :facts))
+                                                     (and cur (plist-get cur :summaries)))))
             (atlas-store-save-meta root (plist-get state :meta))
             (plist-put state :last-index-at (atlas--now))
             (atlas--set-state root state)
@@ -357,7 +364,7 @@ If nil, apply TTL/changed-only policy: full if TTL expired, else changed-only."
           (atlas-log :info "index:run-sources root=%s mode=%s changed=%s"
                      root (if do-full 'full 'changed) (and changed-list (length changed-list)))
           (atlas-run-sources root :changed arg :opts nil :emit emit :done done
-                             :kinds '(files symbols edges summaries) :levels '(L0 L1 L2 L3) :languages '(elisp))
+                             :kinds '(files symbols edges summaries facts) :levels '(L0 L1 L2 L3) :languages '(elisp))
           (funcall done)
           ;; Recalculate counts from store to keep meta accurate on partial updates
           (let* ((cur (ignore-errors (atlas-store-counts root)))
@@ -382,7 +389,9 @@ If nil, apply TTL/changed-only policy: full if TTL expired, else changed-only."
                               (if (> edges-acc 0) edges-acc (if (> edges-count 0) edges-count 0)))))
             (atlas-log :info "index:counts files=%d symbols=%d edges=%d (emitted=%d/%d/%d)"
                        files-count symbols-count edges-count files-acc symbols-acc edges-acc)
-            (setf state (atlas--update-meta-counts state files-count symbols-count edges-count))
+            (setf state (atlas--update-meta-counts state files-count symbols-count edges-count
+                                                   (and cur (plist-get cur :facts))
+                                                   (and cur (plist-get cur :summaries))))
             (atlas-store-save-meta root (plist-get state :meta))
             (plist-put state :last-index-at (atlas--now))
             (atlas--set-state root state)

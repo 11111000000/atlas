@@ -1,11 +1,10 @@
-;;; atlas-source-elisp.el --- Elisp provider (L0-L2 skeleton) -*- lexical-binding: t; -*-
+;;; atlas-source-elisp.el --- Elisp provider (L0-L2 + summaries) -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; L0: inventory of .el files
 ;; L1: basic symbols: defun/defmacro/defvar/defcustom/defconst (names only, positions 0..0 as stub)
 ;; L2: require/provide edges (naive scan)
-;; Parsing is conservative and robust; large files degrade gracefully.
-
+;; Parsing is conservative and robust; large files degrade gracefully. Emits Commentary as summaries.
 ;;; Code:
 
 (require 'cl-lib)
@@ -37,7 +36,7 @@
     (dolist (path (directory-files-recursively root "\\.el\\'" nil))
       (unless (atlas-elisp--excluded-dir-p path)
         (push path files)))
-    (setq files (nreverse files))
+    (setq files (sort (nreverse files) #'string<))
     (atlas-log :debug "elisp:list-files root=%s total=%d" root (length files))
     files))
 
@@ -124,6 +123,25 @@
                   (car (split-string doc "\n" t)))))
     first))
 
+(defun atlas-elisp--extract-commentary (content)
+  "Extract Commentary section from elisp CONTENT string, between
+;;; Commentary:
+and the following ';;; Code:' (or next triple-semicolon header).
+Returns trimmed string or nil."
+  (when (stringp content)
+    (condition-case _
+        (let* ((start (string-match "^[ \t]*;;;[ \t]*Commentary:[ \t]*\\(\n\\|\\'\\)" content))
+               (s (and start (match-end 0)))
+               (end (and s
+                         (or (string-match "^[ \t]*;;;[ \t]*Code:[ \t]*\\(\n\\|\\'\\)" content s)
+                             (string-match "^[ \t]*;;;[^\n]*$" content s)))))
+          (when s
+            (let* ((e (or end (length content)))
+                   (raw (substring content s e))
+                   (txt (string-trim raw)))
+              (and (> (length txt) 0) txt))))
+      (error nil))))
+
 (defun atlas-elisp--symbol-kind (head)
   (pcase head
     ('defun 'function)
@@ -207,8 +225,25 @@ CHANGED may be :auto, nil, or a list of paths (relative or absolute)."
                     (setq symbols (list (list :id id :file rel :name name :kind 'symbol
                                               :beg 0 :end 0 :sig nil :doc1 nil
                                               :exported? t :source 'elisp :lang 'elisp)))))))
+            (setq edges
+                  (seq-sort
+                   (lambda (a b)
+                     (let* ((ta (format "%s" (plist-get a :type)))
+                            (tb (format "%s" (plist-get b :type)))
+                            (oa (format "%s" (plist-get a :to)))
+                            (ob (format "%s" (plist-get b :to))))
+                       (or (string-lessp ta tb)
+                           (and (string= ta tb) (string-lessp oa ob)))))
+                   edges))
             (atlas-log :trace "elisp:L1/L2 file=%s symbols=%d edges=%d" rel (length symbols) (length edges))
-            (funcall emit (list (cons :file rel) (cons :symbols symbols) (cons :edges edges))))
+            (let* ((sum (atlas-elisp--extract-commentary content))
+                   (sums (and (stringp sum) (> (length sum) 0)
+                              (list (list :file rel :summary sum)))))
+              (funcall emit
+                       (append (list (cons :file rel)
+                                     (cons :symbols symbols)
+                                     (cons :edges edges))
+                               (when sums (list (cons :summaries sums)))))))
         (error
          (atlas-log :error "elisp:error path=%s err=%S" path err)))))
   (when (functionp done) (funcall done)))

@@ -50,7 +50,16 @@ KINDS and FILTERS are reserved."
                (when (string-prefix-p tkn down) (cl-incf score 1))))
            (push (cons id score) pairs)))
        scores)
-      (setq pairs (seq-take (seq-sort-by #'cdr #'> pairs) k))
+      (setq pairs
+            (seq-take
+             (sort pairs
+                   (lambda (a b)
+                     (let ((sa (cdr a)) (sb (cdr b)))
+                       (if (/= sa sb)
+                           (> sa sb)
+                         (let ((ia (car a)) (ib (car b)))
+                           (string-lessp (format "%s" ia) (format "%s" ib)))))))
+             k))
       (atlas-log :debug "query: candidates=%d returned=%d" (hash-table-count scores) (length pairs))
       (mapcar
        (lambda (p)

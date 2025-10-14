@@ -52,6 +52,8 @@
 ;; Export commands
 (autoload 'atlas-graph-export-command "atlas-export" nil t)
 (autoload 'atlas-export-llm-command "atlas-export" nil t)
+(autoload 'atlas-export-apm-v2-command "atlas-export" nil t)
+(autoload 'atlas-export-llm-pack-command "atlas-export" nil t)
 
 ;; Log
 (autoload 'atlas-log-open "atlas-log" nil t)
