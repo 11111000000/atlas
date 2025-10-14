@@ -4,7 +4,7 @@
 #+startup: show2levels
 [[https://github.com/11111000000/atlas/actions/workflows/ci.yml/badge.svg][CI status]]
 
-- Overview
+* Overview
 Atlas is a universal, extensible project map for Emacs. It builds and uses a structured map of your project: file inventory, symbols, dependencies, fast lexical retrieval, and budget-aware context planning for tasks and LLMs.
 
 - v1 scope: Emacs Lisp projects
