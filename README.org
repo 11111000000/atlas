@@ -301,5 +301,3 @@ Below are two practical ways to load Atlas via use-package. Pick one.
 
 ** How stable is the format?
 - v1 requires type stability for existing keys; additions are optional. Non-additive changes would bump the schema with documented migrations.
-
-### 
