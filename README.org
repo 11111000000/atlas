@@ -1,7 +1,7 @@
-title: Atlas — Universal Project Map for Emacs
+#+title: Atlas — Universal Project Map for Emacs
 #+author: Peter Kosov <11111000000@email.com>
 #+language: en
-#+options: toc:2 num:t
+#+options: toc:nil num:t
 #+startup: show2levels
 [[https://github.com/11111000000/atlas/actions/workflows/ci.yml/badge.svg][CI status]]
 
