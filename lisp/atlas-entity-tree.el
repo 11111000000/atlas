@@ -206,10 +206,13 @@ Structure:
              (main (car provided))
              (fname (and main (file-name-nondirectory main))))
         ;; Feature header with primary provider file (if any) in brackets
-        (insert (format "  ▸ %s %s%s\n"
-                        (or (atlas-entity-tree--icon 'feature feat) "")
-                        feat
-                        (if fname (format " [%s]" fname) "")))
+        (let* ((feat-name (if (and (stringp feat) (string-prefix-p "feature:" feat))
+                              (substring feat (length "feature:"))
+                            feat)))
+          (insert (format "  ▸ %s %s%s\n"
+                          (or (atlas-entity-tree--icon 'feature feat) "")
+                          feat-name
+                          (if fname (format " [%s]" fname) ""))))
         ;; Collect symbols from the primary provider file and render as foldable items
         (when main
           (let* ((idxs (plist-get state :indexes))
@@ -248,9 +251,9 @@ Structure:
                               (_         "def"))))
                 ;; Symbol heading (foldable)
                 (let ((lstart (point)))
-                  (insert (format "    ▸ %s %s [%s]"
+                  (insert (format "    ▸ %s %s"
                                   (or (atlas-entity-tree--icon 'kind kind) "")
-                                  name kstr))
+                                  name))
                   (insert "\n")
                   (add-text-properties
                    lstart (line-end-position 0)
@@ -628,10 +631,10 @@ Kinds: 'features | 'feature | 'sym | 'provided | 'required | 'file | 'symbols.
     (cond
      ;; ▸ Features (N):
      ((looking-at "^[[:space:]]*[▾▸]\\s-+Features\\s-*(\\([0-9]+\\)):\\s-*$") 'features)
-     ;; ▸ <icon> feature:NAME [file]
-     ((looking-at "^[[:space:]]*[▾▸]\\s-+\\S+\\s-+feature:") 'feature)
-     ;;     ▸ <icon> name [Kind]   (symbol heading)
-     ((looking-at "^[[:space:]]+[▾▸]\\s-+\\S+\\s-+[^[]+\\[[^]]+\\]\\s-*$") 'sym)
+     ;; ▸ <icon> NAME [file]
+     ((looking-at "^[[:space:]]\\{2\\}[▾▸]\\s-+\\S+\\s-+[^[]+\\(\\[[^]]+\\]\\)?\\s-*$") 'feature)
+     ;;     ▸ <icon> name   (symbol heading)
+     ((looking-at "^[[:space:]]\\{4\\}[▾▸]\\s-+\\S+\\s-+[^[]+\\s-*$") 'sym)
      ;; legacy (other views) — keep support
      ((looking-at "^[[:space:]]+[▾▸]\\s-+Provided by\\s-*(\\([0-9]+\\)):\\s-*$") 'provided)
      ((looking-at "^[[:space:]]+[▾▸]\\s-+Required by\\s-*(\\([0-9]+\\)):\\s-*$") 'required)
@@ -653,12 +656,11 @@ Kinds: 'features | 'feature | 'sym | 'provided | 'required | 'file | 'symbols.
 (defun atlas-entity-tree--next-header-pos (level)
   "Return point at the next header with level <= LEVEL, or point-max."
   (save-excursion
-    (while (progn
-             (forward-line 1)
-             (and (not (eobp))
-                  (let* ((k (atlas-entity-tree--fold-head-kind))
-                         (kl (and k (atlas-entity-tree--fold-level k))))
-                    (or (null k) (> kl level))))))
+    (while (and (not (eobp))
+                (let* ((k (atlas-entity-tree--fold-head-kind))
+                       (kl (and k (atlas-entity-tree--fold-level k))))
+                  (or (null k) (> kl level)))
+                (progn (forward-line 1) t)))
     (point)))
 
 ;; Navigation between foldable headings (no external deps)
@@ -1098,7 +1100,10 @@ Keys:
 (cl-defun atlas-entity-tree (root)
   "Open or refresh the Atlas entity tree for ROOT directory.
 Returns the buffer."
-  (interactive (list (read-directory-name "Atlas root: " nil nil t)))
+  (interactive
+   (list (if current-prefix-arg
+             (read-directory-name "Atlas root: " nil nil t)
+           (atlas--project-root default-directory))))
   (let* ((state (or (atlas-state root) (atlas-open root)))
          (buf (get-buffer-create atlas-entity-tree--buffer-name)))
     (unless state
@@ -1119,7 +1124,9 @@ Returns the buffer."
   "Open Atlas entity tree for ROOT in 'search view with QUERY and optional K limit.
 Returns the tree buffer."
   (interactive
-   (list (read-directory-name "Atlas root: " nil nil t)
+   (list (if current-prefix-arg
+             (read-directory-name "Atlas root: " nil nil t)
+           (atlas--project-root default-directory))
          (read-string "Query: ")
          (when current-prefix-arg (prefix-numeric-value current-prefix-arg))))
   (let ((buf (atlas-entity-tree root)))
@@ -1137,7 +1144,9 @@ Returns the tree buffer."
   "Open Atlas entity tree for ROOT in 'edges view around SELECTOR.
 SELECTOR may be file REL, feature:NAME, or symbol id. With prefix arg, set DEPTH."
   (interactive
-   (list (read-directory-name "Atlas root: " nil nil t)
+   (list (if current-prefix-arg
+             (read-directory-name "Atlas root: " nil nil t)
+           (atlas--project-root default-directory))
          (read-string "Selector (file REL, feature:NAME, or symbol id): ")
          (when current-prefix-arg (prefix-numeric-value current-prefix-arg))))
   (let ((buf (atlas-entity-tree root)))
@@ -1155,7 +1164,9 @@ SELECTOR may be file REL, feature:NAME, or symbol id. With prefix arg, set DEPTH
   "Open Atlas entity tree for ROOT in 'plan view for QUERY.
 Optional K and BUDGET override defaults for the view."
   (interactive
-   (list (read-directory-name "Atlas root: " nil nil t)
+   (list (if current-prefix-arg
+             (read-directory-name "Atlas root: " nil nil t)
+           (atlas--project-root default-directory))
          (read-string "Query: ")
          (when current-prefix-arg (read-number "Top K: " 12))
          (when current-prefix-arg (read-number "Budget (tokens): " atlas-plan-default-budget))))
@@ -1176,7 +1187,7 @@ Optional K and BUDGET override defaults for the view."
   "Compatibility alias: open Atlas Entities tree for ROOT (or current directory).
 Replaces legacy =atlas-entities' UI with the new entity-centric tree."
   (interactive)
-  (atlas-entity-tree (or root default-directory)))
+  (atlas-entity-tree (or root (atlas--project-root default-directory))))
 
 ;; Docstring helpers and toggle
 

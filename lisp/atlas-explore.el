@@ -49,9 +49,12 @@ Keys:
 ;;;###autoload
 (defun atlas-explore (root query &optional k)
   "Explore Atlas ROOT for QUERY and show results in a temp buffer."
-  (interactive (list (read-directory-name "Atlas root: " nil nil t)
-                     (read-string "Query: ")
-                     (when current-prefix-arg (prefix-numeric-value current-prefix-arg))))
+  (interactive
+   (list (if current-prefix-arg
+             (read-directory-name "Atlas root: " nil nil t)
+           (atlas--project-root default-directory))
+         (read-string "Query: ")
+         (when current-prefix-arg (prefix-numeric-value current-prefix-arg))))
   (let* ((k (or k 20))
          (results (atlas-query root query :k k))
          (buf (get-buffer-create "*Atlas Explore*")))

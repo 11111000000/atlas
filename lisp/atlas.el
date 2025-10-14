@@ -107,6 +107,27 @@ The original token remains; sub-tokens are added additionally."
   (file-name-as-directory
    (expand-file-name ".context/atlas/v1/" (file-name-as-directory root))))
 
+(defun atlas--project-root (&optional dir)
+  "Detect project root directory from DIR or =default-directory'.
+Prefers project.el and VC; falls back to locating .git/.hg/.context.
+Always returns an expanded directory path with trailing slash."
+  (let* ((base (file-name-as-directory (expand-file-name (or dir default-directory))))
+         (proj (when (fboundp 'project-current)
+                 (let ((pr (ignore-errors (project-current nil base))))
+                   (and pr (ignore-errors (project-root pr))))))
+         (vc (when (fboundp 'vc-root-dir)
+               (ignore-errors (vc-root-dir))))
+         (dom (or (ignore-errors
+                    (locate-dominating-file
+                     base
+                     (lambda (d)
+                       (or (file-directory-p (expand-file-name ".git" d))
+                           (file-directory-p (expand-file-name ".hg" d))
+                           (file-directory-p (expand-file-name ".context" d))))))
+                  nil))
+         (root (or proj vc dom base)))
+    (file-name-as-directory (expand-file-name root))))
+
 (defun atlas--now () (float-time (current-time)))
 
 (cl-defun atlas--default-meta (root)
@@ -133,7 +154,10 @@ The original token remains; sub-tokens are added additionally."
 ;;;###autoload
 (defun atlas-open (root)
   "Open Atlas for ROOT directory: ensure store dir, load meta and in-memory indices, return state."
-  (interactive (list (read-directory-name "Atlas root: " nil nil t)))
+  (interactive
+   (list (if current-prefix-arg
+             (read-directory-name "Atlas root: " nil nil t)
+           (atlas--project-root default-directory))))
   (let* ((root (file-name-as-directory (expand-file-name root)))
          (dir (atlas-root-dir root)))
     (atlas--ensure-dir dir)
@@ -159,7 +183,10 @@ The original token remains; sub-tokens are added additionally."
 ;;;###autoload
 (defun atlas-close (root)
   "Close Atlas for ROOT: drop in-memory state."
-  (interactive (list (read-directory-name "Atlas root: " nil nil t)))
+  (interactive
+   (list (if current-prefix-arg
+             (read-directory-name "Atlas root: " nil nil t)
+           (atlas--project-root default-directory))))
   (let* ((root (file-name-as-directory (expand-file-name root))))
     (remhash root atlas--states)
     (when (called-interactively-p 'interactive)
@@ -179,7 +206,10 @@ The original token remains; sub-tokens are added additionally."
 ;;;###autoload
 (defun atlas-stats (root)
   "Return stats alist for ROOT with counts and schema."
-  (interactive (list (read-directory-name "Atlas root: " nil nil t)))
+  (interactive
+   (list (if current-prefix-arg
+             (read-directory-name "Atlas root: " nil nil t)
+           (atlas--project-root default-directory))))
   (let* ((state (or (atlas-state root) (atlas-open root)))
          (meta (plist-get state :meta))
          (counts (or (plist-get meta :counts) (list :files 0 :symbols 0 :edges 0)))
@@ -212,8 +242,11 @@ The original token remains; sub-tokens are added additionally."
   "Index ROOT. If FULL-OR-CHANGED is t (or non-nil non-list), do a full rebuild.
 If FULL-OR-CHANGED is a list of paths, reindex only those files.
 If nil, apply TTL/changed-only policy: full if TTL expired, else changed-only."
-  (interactive (list (read-directory-name "Atlas root: " nil nil t)
-                     (when current-prefix-arg t)))
+  (interactive
+   (list (if current-prefix-arg
+             (read-directory-name "Atlas root: " nil nil t)
+           (atlas--project-root default-directory))
+         (when current-prefix-arg t)))
   (let* ((state (atlas-open root))
          (files-acc 0) (symbols-acc 0) (edges-acc 0)
          (now (float-time))
@@ -362,15 +395,21 @@ If nil, apply TTL/changed-only policy: full if TTL expired, else changed-only."
 ;;;###autoload
 (defun atlas-reindex-changed (root)
   "Reindex files that changed in ROOT since last run."
-  (interactive (list (read-directory-name "Atlas root: " nil nil t)))
+  (interactive
+   (list (if current-prefix-arg
+             (read-directory-name "Atlas root: " nil nil t)
+           (atlas--project-root default-directory))))
   (atlas-index root nil))
 
 ;;;###autoload
 (defun atlas-query-command (root query &optional k)
   "Interactive query in ROOT for QUERY with top K results."
-  (interactive (list (read-directory-name "Atlas root: " nil nil t)
-                     (read-string "Query: ")
-                     (when current-prefix-arg (prefix-numeric-value current-prefix-arg))))
+  (interactive
+   (list (if current-prefix-arg
+             (read-directory-name "Atlas root: " nil nil t)
+           (atlas--project-root default-directory))
+         (read-string "Query: ")
+         (when current-prefix-arg (prefix-numeric-value current-prefix-arg))))
   (let* ((k (or k 10))
          (res (atlas-query root query :k k)))
     (message "Top %d results returned" (length res))

@@ -72,7 +72,10 @@ use `atlas-watch-add-root' and `atlas-watch-remove-root'."
 ;;;###autoload
 (defun atlas-watch-add-root (root)
   "Start watching ROOT directory (adds to the current watch set)."
-  (interactive (list (read-directory-name "Watch root: " nil nil t)))
+  (interactive
+   (list (if current-prefix-arg
+             (read-directory-name "Watch root: " nil nil t)
+           (atlas--project-root default-directory))))
   (atlas-watch-start root)
   (message "Atlas watch added: %s" (file-name-as-directory (expand-file-name root))))
 
