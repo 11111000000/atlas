@@ -1,7 +1,7 @@
 ;;; atlas.el --- Project map for Emacs: core and commands -*- lexical-binding: t; -*-
 
 ;; Author: Peter Kosov <11111000000@email.com>
-;; Version: 1.0.0
+;; Version: 1.1.0
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/11111000000/atlas
