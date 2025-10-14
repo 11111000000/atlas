@@ -1,4 +1,4 @@
-title: Atlas — Universal Project Map for Emacs
+#+title: Atlas — Universal Project Map for Emacs
 #+author: Atlas Authors
 #+language: en
 #+options: toc:2 num:nil
