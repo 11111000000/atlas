@@ -1,9 +1,8 @@
 #+title: Atlas — Universal Project Map for Emacs
 #+author: Peter Kosov <11111000000@email.com>
 #+language: en
-#+options: toc:nil num:t
+#+options: toc:2 num:nil
 #+startup: show2levels
-[[https://github.com/11111000000/atlas/actions/workflows/ci.yml/badge.svg][CI status]]
 
 * Overview
 Atlas is a universal, extensible project map for Emacs. It builds and uses a structured map of your project: file inventory, symbols, dependencies, fast lexical retrieval, and budget-aware context planning for tasks and LLMs. v1 focuses on Emacs Lisp, with a design and schemas ready to grow to polyglot repositories.
@@ -45,20 +44,7 @@ Atlas is a universal, extensible project map for Emacs. It builds and uses a str
 * use-package (lazy-load)
 #+begin_src emacs-lisp
 (use-package atlas
-  :load-path (lambda () (expand-file-name "lisp" "~/Code/atlas"))
-  :commands (atlas-open atlas-close
-             atlas-index atlas-reindex-changed atlas-update atlas-stats
-             atlas-query-command atlas-explore
-             atlas-graph-export-command atlas-export-llm-command
-             atlas-export-apm-v2-command atlas-export-llm-pack-command
-             atlas-entity-tree atlas-entities
-             atlas-watch-mode atlas-watch-add-root atlas-watch-remove-root atlas-watch-list-roots
-             atlas-progress-mode
-             atlas-log-open atlas-log-clear)
-  :init
-  ;; Minimal progress in mode-line
-  (require 'atlas-ui)
-  (atlas-progress-mode 1))
+  :load-path (lambda () (expand-file-name "lisp" "~/Code/atlas")))
 #+end_src
 
 * Quick enable for local development
