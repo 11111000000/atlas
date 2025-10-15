@@ -196,8 +196,8 @@ One of: 'by-feature (implemented), 'by-kind, 'search (TBD).")
 Structure:
 ▸ Features (N):
   ▸ <icon> feature:NAME [main.el]
-    ▸ <kind-icon> symbol [Kind]
-      (def<kind> symbol) — first doc line"
+    ▸ <kind-icon> symbol — first doc line
+      (def<kind> symbol)"
   (let* ((state (atlas-entity-tree--state root))
          (features (atlas-entity-tree--collect-features state)))
     (insert (format "▸ Features (%d):\n" (length features)))
@@ -249,11 +249,14 @@ Structure:
                               ('custom   "defcustom")
                               ('const    "defconst")
                               (_         "def"))))
-                ;; Symbol heading (foldable)
-                (let ((lstart (point)))
+                ;; Symbol heading (foldable) — show doc on the heading; definition under fold
+                (let* ((first (car (and (stringp doc1) (split-string doc1 "\n" t))))
+                       (lstart (point)))
                   (insert (format "    ▸ %s %s"
                                   (or (atlas-entity-tree--icon 'kind kind) "")
                                   name))
+                  (when (and first (> (length first) 0))
+                    (insert (format " — %s" first)))
                   (insert "\n")
                   (add-text-properties
                    lstart (line-end-position 0)
@@ -261,13 +264,10 @@ Structure:
                          'atlas-rel main
                          'atlas-beg beg
                          'mouse-face 'highlight)))
-                ;; Body line with definition + first doc line (hidden by default via fold)
-                (let ((first (car (and (stringp doc1) (split-string doc1 "\n" t)))))
-                  (insert (format "      (%s %s)%s\n"
-                                  defkw name
-                                  (if (and first (> (length first) 0))
-                                      (format " — %s" first)
-                                    ""))))))))))))
+                ;; Body line with definition only (hidden by default via fold)
+                (let ((sigstr (if (and (stringp sig) (> (length sig) 0)) (format " %s" sig) "")))
+                  (insert (format "      (%s %s%s)\n"
+                                  defkw name sigstr)))))))))))
 
 (defun atlas-entity-tree--all-symbols (state)
   "Return list of symbol plists from STATE via inverted index."
@@ -633,8 +633,8 @@ Kinds: 'features | 'feature | 'sym | 'provided | 'required | 'file | 'symbols.
      ((looking-at "^[[:space:]]*[▾▸]\\s-+Features\\s-*(\\([0-9]+\\)):\\s-*$") 'features)
      ;; ▸ <icon> NAME [file]
      ((looking-at "^[[:space:]]\\{2\\}[▾▸]\\s-+\\S+\\s-+[^[]+\\(\\[[^]]+\\]\\)?\\s-*$") 'feature)
-     ;;     ▸ <icon> name   (symbol heading)
-     ((looking-at "^[[:space:]]\\{4\\}[▾▸]\\s-+\\S+\\s-+[^[]+\\s-*$") 'sym)
+     ;;     ▸ <icon> name — doc (symbol heading; allow any trailing text)
+     ((looking-at "^[[:space:]]\\{4\\}[▾▸]\\s-+\\S+\\s-+.+\\s-*$") 'sym)
      ;; legacy (other views) — keep support
      ((looking-at "^[[:space:]]+[▾▸]\\s-+Provided by\\s-*(\\([0-9]+\\)):\\s-*$") 'provided)
      ((looking-at "^[[:space:]]+[▾▸]\\s-+Required by\\s-*(\\([0-9]+\\)):\\s-*$") 'required)
