@@ -265,7 +265,35 @@ Structure:
                          'atlas-beg beg
                          'mouse-face 'highlight)))
                 ;; Body line with definition only (hidden by default via fold)
-                (let ((sigstr (if (and (stringp sig) (> (length sig) 0)) (format " %s" sig) "")))
+                (let* ((raw (and (stringp sig) (string-trim sig)))
+                       (args
+                        (cond
+                         ((or (null raw) (string-empty-p raw)) "")
+                         ;; Full form: "(defun name (args))", "(defmacro ...)", "(defvar ...)", etc.
+                         ((string-prefix-p "(" raw)
+                          (condition-case _
+                              (let* ((form (car (read-from-string raw))))
+                                (cond
+                                 ((and (consp form) (memq (car form) '(defun defmacro)))
+                                  (prin1-to-string (nth 2 form))) ; arglist only
+                                 ;; For variables/custom/const — don't duplicate value/init
+                                 ((and (consp form) (memq (car form) '(defvar defconst defcustom)))
+                                  "")
+                                 (t "")))
+                            (error "")))
+                         ;; "defun name (args)" or similar without parens
+                         ((string-match (format "\\=def\\w+\\s-+%s\\s-+\\(([^)]*)\\)\\s-*\\'" (regexp-quote name)) raw)
+                          (match-string 1 raw))
+                         ;; Already just an arglist "(args)"
+                         ((string-match "\\=\\(([^)]*)\\)\\s-*\\'" raw)
+                          (match-string 1 raw))
+                         ;; "name (args)"
+                         ((string-match (format "\\=%s\\s-+\\(([^)]*)\\)\\s-*\\'" (regexp-quote name)) raw)
+                          (match-string 1 raw))
+                         (t "")))
+                       (sigstr (if (and (stringp args) (> (length args) 0))
+                                   (if (string-prefix-p "(" args) (format " %s" args) (format " (%s)" args))
+                                 "")))
                   (insert (format "      (%s %s%s)\n"
                                   defkw name sigstr)))))))))))
 
