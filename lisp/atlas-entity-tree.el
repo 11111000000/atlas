@@ -721,7 +721,8 @@ Supported headings:
                 (setq ov (make-overlay body-beg body-end))
                 (overlay-put ov 'is-atlas-fold t)
                 (overlay-put ov 'invisible 'atlas-fold)
-                (put-text-property lbeg lend 'atlas-fold-ov ov)
+                (let ((inhibit-read-only t))
+                  (put-text-property lbeg lend 'atlas-fold-ov ov))
                 (setq created t)))))
         (if (overlayp ov)
             (progn
@@ -740,7 +741,12 @@ Supported headings:
                      ((looking-at "[▾▸]")
                       (replace-match (if new-inv "▸" "▾") t t))
                      (t
-                      (insert (if new-inv "▸ " "▾ "))))))))
+                      (insert (if new-inv "▸ " "▾ "))))
+                    ;; Re-attach overlay reference to the heading text,
+                    ;; because replace-match can drop text properties.
+                    (let ((hb (line-beginning-position))
+                          (he (line-end-position)))
+                      (put-text-property hb he 'atlas-fold-ov ov))))))
           (message "Nothing to fold under this heading"))))))
 
 (defun atlas-entity-tree--render (root)
